@@ -1,0 +1,194 @@
+---
+# CIS RHEL9 - Section 2: Services
+
+- name: Cargar datos de la seccion 2 (services)
+  ansible.builtin.include_vars: section2_services.yml
+  tags: always
+
+# --- 2.1 Servicios que no deben estar en uso ---------------------------------------------
+- name: 2.1.x - Detener, deshabilitar y enmascarar servicios/sockets no utilizados
+  ansible.builtin.systemd:
+    name: "{{ item.unit }}"
+    state: stopped
+    enabled: false
+    masked: true
+  loop: "{{ rhel9cis_unused_services }}"
+  loop_control:
+    label: "{{ item.id }} {{ item.unit }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= item.level
+  failed_when: false
+  tags: ["2.1.1", "2.1.2", "2.1.3", "2.1.4", "2.1.5", "2.1.6", "2.1.7", "2.1.8", "2.1.9",
+         "2.1.10", "2.1.11", "2.1.12", "2.1.13", "2.1.14", "2.1.15", "2.1.16", "2.1.17",
+         "2.1.18", "2.1.19", "level1", "server"]
+
+- name: 2.1.20 (Nivel 2) - Asegurar que el servidor X Window no este instalado
+  ansible.builtin.dnf:
+    name: "{{ rhel9cis_x11_packages }}"
+    state: absent
+  when:
+    - rhel9cis_rule_2_1_20 | bool
+    - rhel9cis_level >= 2
+  tags: ["2.1.20", "level2", "server"]
+
+- name: 2.1.21 - Configurar el agente de transporte de correo (postfix) en modo solo local
+  ansible.builtin.lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^\s*inet_interfaces\s*='
+    line: "inet_interfaces = loopback-only"
+    backup: true
+  when:
+    - rhel9cis_rule_2_1_21 | bool
+    - rhel9cis_level >= 1
+    - "'postfix' in ansible_facts.packages"
+  notify: "restart postfix"
+  tags: ["2.1.21", "level1", "server"]
+
+# --- 2.2 Paquetes cliente que no deben estar instalados -----------------------------------
+- name: 2.2.x - Asegurar que paquetes cliente no requeridos no esten instalados
+  ansible.builtin.dnf:
+    name: "{{ item.package }}"
+    state: absent
+  loop: "{{ rhel9cis_unused_client_packages }}"
+  loop_control:
+    label: "{{ item.id }} {{ item.package }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= item.level
+  tags: ["2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "level1", "level2", "server"]
+
+# --- 2.3 Sincronizacion horaria (chrony) ---------------------------------------------------
+- name: 2.3.1 - Asegurar que chrony este instalado (sincronizacion horaria)
+  ansible.builtin.dnf:
+    name: chrony
+    state: present
+  when:
+    - rhel9cis_rule_2_3_1 | bool
+    - rhel9cis_level >= 1
+  tags: ["2.3.1", "level1", "server"]
+
+- name: 2.3.1 - Asegurar que el servicio chronyd este habilitado y activo
+  ansible.builtin.systemd:
+    name: chronyd
+    state: started
+    enabled: true
+  when:
+    - rhel9cis_rule_2_3_1 | bool
+    - rhel9cis_level >= 1
+  tags: ["2.3.1", "level1", "server"]
+
+- name: 2.3.2 - Verificar que chrony tenga al menos un servidor/pool NTP configurado (auditoria)
+  ansible.builtin.command: grep -E -c '^\s*(server|pool)\s+' /etc/chrony.conf
+  register: rhel9cis_chrony_servers
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - rhel9cis_rule_2_3_2 | bool
+    - rhel9cis_level >= 1
+  tags: ["2.3.2", "level1", "server"]
+
+- name: 2.3.2 - Advertir si chrony no tiene servidores/pools NTP configurados
+  ansible.builtin.assert:
+    that:
+      - (rhel9cis_chrony_servers.stdout | default('0') | int) > 0
+    fail_msg: >-
+      [2.3.2] /etc/chrony.conf no tiene ninguna directiva server/pool configurada.
+      Definir los servidores NTP autorizados del banco manualmente o via variable
+      dedicada antes de considerar este control cumplido.
+    quiet: true
+  ignore_errors: true
+  when:
+    - rhel9cis_rule_2_3_2 | bool
+    - rhel9cis_level >= 1
+  tags: ["2.3.2", "level1", "server"]
+
+- name: 2.3.3 - Asegurar que chronyd no se ejecute como root (usuario chrony)
+  ansible.builtin.lineinfile:
+    path: /etc/sysconfig/chronyd
+    regexp: '^OPTIONS='
+    line: 'OPTIONS="-u chrony"'
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  notify: "restart chronyd"
+  when:
+    - rhel9cis_rule_2_3_3 | bool
+    - rhel9cis_level >= 1
+  tags: ["2.3.3", "level1", "server"]
+
+# --- 2.4.1 cron -----------------------------------------------------------------------------
+- name: 2.4.1.1 - Asegurar que el demonio cron este habilitado y activo
+  ansible.builtin.systemd:
+    name: crond
+    state: started
+    enabled: true
+  when:
+    - rhel9cis_rule_2_4_1_1 | bool
+    - rhel9cis_level >= 1
+  tags: ["2.4.1.1", "level1", "server"]
+
+- name: 2.4.1.x - Fijar permisos de archivos/directorios de cron
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop: "{{ rhel9cis_cron_paths }}"
+  loop_control:
+    label: "{{ item.id }} {{ item.path }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= 1
+  notify: "restart crond"
+  tags: ["2.4.1.2", "2.4.1.3", "2.4.1.4", "2.4.1.5", "2.4.1.6", "2.4.1.7", "level1", "server"]
+
+- name: 2.4.1.8 - Restringir crontab a usuarios autorizados (eliminar cron.deny, crear cron.allow)
+  ansible.builtin.file:
+    path: /etc/cron.deny
+    state: absent
+  when:
+    - rhel9cis_rule_2_4_1_8 | bool
+    - rhel9cis_level >= 1
+  tags: ["2.4.1.8", "level1", "server"]
+
+- name: 2.4.1.8 - Asegurar que exista /etc/cron.allow con permisos restrictivos
+  ansible.builtin.file:
+    path: /etc/cron.allow
+    state: touch
+    owner: root
+    group: root
+    mode: "0600"
+    access_time: preserve
+    modification_time: preserve
+  when:
+    - rhel9cis_rule_2_4_1_8 | bool
+    - rhel9cis_level >= 1
+  tags: ["2.4.1.8", "level1", "server"]
+
+# --- 2.4.2 at ------------------------------------------------------------------------------
+- name: 2.4.2.1 - Restringir at a usuarios autorizados (eliminar at.deny, crear at.allow)
+  ansible.builtin.file:
+    path: /etc/at.deny
+    state: absent
+  when:
+    - rhel9cis_rule_2_4_2_1 | bool
+    - rhel9cis_level >= 1
+  tags: ["2.4.2.1", "level1", "server"]
+
+- name: 2.4.2.1 - Asegurar que exista /etc/at.allow con permisos restrictivos
+  ansible.builtin.file:
+    path: /etc/at.allow
+    state: touch
+    owner: root
+    group: root
+    mode: "0600"
+    access_time: preserve
+    modification_time: preserve
+  when:
+    - rhel9cis_rule_2_4_2_1 | bool
+    - rhel9cis_level >= 1
+  tags: ["2.4.2.1", "level1", "server"]

@@ -1,0 +1,9 @@
+---
+# Seccion 4 - Firewall. El banco usa UNA sola utilidad de firewall (rhel9cis_firewall_utility):
+# "firewalld" (por defecto, recomendado para gestion por zonas) o "nftables" (reglas nativas).
+# Las tareas de la utilidad NO seleccionada se omiten y esa utilidad se enmascara (4.1.2).
+
+rhel9cis_firewall_utilities_known:
+  - firewalld
+  - nftables
+  - iptables

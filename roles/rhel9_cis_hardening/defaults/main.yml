@@ -1,0 +1,338 @@
+---
+# =============================================================================
+# rhel9_cis_hardening - default variables
+# Banco Solidario / GMS - Playbook 1/18: CIS RHEL 9 Benchmark v2.0.0, Nivel 1 + 2, perfil Server
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Nivel CIS a aplicar: 1 = solo Nivel 1, 2 = Nivel 1 + Nivel 2 (recomendado banco)
+# -----------------------------------------------------------------------------
+rhel9cis_level: 2
+
+# Perfil del benchmark. Este rol implementa unicamente el perfil "Server".
+rhel9cis_profile: server
+
+# -----------------------------------------------------------------------------
+# Toggles funcionales / de entorno
+# -----------------------------------------------------------------------------
+# Poner en true SOLO en la primera corrida de verificacion (no aplica cambios,
+# usar ansible-playbook --check --diff en su lugar; este flag es independiente)
+rhel9cis_reboot_required: false  # se activa via set_fact/handler cuando una tarea exige reinicio
+
+# systemd-based facilities
+rhel9cis_is_container: false  # poner true si el host es un contenedor (omite tareas de kernel/grub/particiones)
+
+# Utilidad de firewall a usar de forma exclusiva: "firewalld" (por defecto, recomendado) o "nftables"
+rhel9cis_firewall_utility: firewalld
+
+# GRUB2 bootloader password (seccion 1.4.1). Vacio = tarea se omite (requiere definir via vault).
+rhel9cis_grub_user: root
+rhel9cis_grub_password: ""
+
+# sudo: grupo autorizado a usar `su` (seccion 5.2.7)
+rhel9cis_su_group: sugroup
+
+# SSH: listas de control de acceso (seccion 5.1.7) - AllowGroups tiene prioridad si no esta vacio
+rhel9cis_sshd_allow_groups: []
+rhel9cis_sshd_allow_users: []
+rhel9cis_sshd_deny_groups: []
+rhel9cis_sshd_deny_users: []
+
+# journald / auditd remote log host (dejar vacio para no configurar envio remoto; ver 6.2.3.6 manual)
+rhel9cis_remote_log_host: ""
+
+# UID minimo interactivo, se autodetecta de /etc/login.defs si se deja en 0
+rhel9cis_uid_min_override: 0
+
+# -----------------------------------------------------------------------------
+# Toggles individuales por control CIS (una variable booleana por control)
+# Poner en false para EXCEPTUAR un control puntual documentado por el banco.
+# -----------------------------------------------------------------------------
+
+# --- Section 1 Initial Setup -------------------------
+rhel9cis_rule_1_1_1_1: true  # [1.1.1.1] (L1) Ensure cramfs kernel module is not available
+rhel9cis_rule_1_1_1_2: true  # [1.1.1.2] (L1) Ensure freevxfs kernel module is not available
+rhel9cis_rule_1_1_1_3: true  # [1.1.1.3] (L1) Ensure hfs kernel module is not available
+rhel9cis_rule_1_1_1_4: true  # [1.1.1.4] (L1) Ensure hfsplus kernel module is not available
+rhel9cis_rule_1_1_1_5: true  # [1.1.1.5] (L1) Ensure jffs2 kernel module is not available
+rhel9cis_rule_1_1_1_6: true  # [1.1.1.6] (L2) Ensure squashfs kernel module is not available
+rhel9cis_rule_1_1_1_7: true  # [1.1.1.7] (L2) Ensure udf kernel module is not available
+rhel9cis_rule_1_1_1_8: true  # [1.1.1.8] (L1) Ensure usb-storage kernel module is not available
+rhel9cis_rule_1_1_2_1_1: true  # [1.1.2.1.1] (L1) Ensure /tmp is a separate partition
+rhel9cis_rule_1_1_2_1_2: true  # [1.1.2.1.2] (L1) Ensure nodev option set on /tmp partition
+rhel9cis_rule_1_1_2_1_3: true  # [1.1.2.1.3] (L1) Ensure nosuid option set on /tmp partition
+rhel9cis_rule_1_1_2_1_4: true  # [1.1.2.1.4] (L1) Ensure noexec option set on /tmp partition
+rhel9cis_rule_1_1_2_2_1: true  # [1.1.2.2.1] (L1) Ensure /dev/shm is a separate partition
+rhel9cis_rule_1_1_2_2_2: true  # [1.1.2.2.2] (L1) Ensure nodev option set on /dev/shm partition
+rhel9cis_rule_1_1_2_2_3: true  # [1.1.2.2.3] (L1) Ensure nosuid option set on /dev/shm partition
+rhel9cis_rule_1_1_2_2_4: true  # [1.1.2.2.4] (L1) Ensure noexec option set on /dev/shm partition
+rhel9cis_rule_1_1_2_3_1: true  # [1.1.2.3.1] (L2) Ensure separate partition exists for /home
+rhel9cis_rule_1_1_2_3_2: true  # [1.1.2.3.2] (L1) Ensure nodev option set on /home partition
+rhel9cis_rule_1_1_2_3_3: true  # [1.1.2.3.3] (L1) Ensure nosuid option set on /home partition
+rhel9cis_rule_1_1_2_4_1: true  # [1.1.2.4.1] (L2) Ensure separate partition exists for /var
+rhel9cis_rule_1_1_2_4_2: true  # [1.1.2.4.2] (L1) Ensure nodev option set on /var partition
+rhel9cis_rule_1_1_2_4_3: true  # [1.1.2.4.3] (L1) Ensure nosuid option set on /var partition
+rhel9cis_rule_1_1_2_5_1: true  # [1.1.2.5.1] (L2) Ensure separate partition exists for /var/tmp
+rhel9cis_rule_1_1_2_5_2: true  # [1.1.2.5.2] (L1) Ensure nodev option set on /var/tmp partition
+rhel9cis_rule_1_1_2_5_3: true  # [1.1.2.5.3] (L1) Ensure nosuid option set on /var/tmp partition
+rhel9cis_rule_1_1_2_5_4: true  # [1.1.2.5.4] (L1) Ensure noexec option set on /var/tmp partition
+rhel9cis_rule_1_1_2_6_1: true  # [1.1.2.6.1] (L2) Ensure separate partition exists for /var/log
+rhel9cis_rule_1_1_2_6_2: true  # [1.1.2.6.2] (L1) Ensure nodev option set on /var/log partition
+rhel9cis_rule_1_1_2_6_3: true  # [1.1.2.6.3] (L1) Ensure nosuid option set on /var/log partition
+rhel9cis_rule_1_1_2_6_4: true  # [1.1.2.6.4] (L1) Ensure noexec option set on /var/log partition
+rhel9cis_rule_1_1_2_7_1: true  # [1.1.2.7.1] (L2) Ensure separate partition exists for /var/log/audit
+rhel9cis_rule_1_1_2_7_2: true  # [1.1.2.7.2] (L1) Ensure nodev option set on /var/log/audit partition
+rhel9cis_rule_1_1_2_7_3: true  # [1.1.2.7.3] (L1) Ensure nosuid option set on /var/log/audit partition
+rhel9cis_rule_1_1_2_7_4: true  # [1.1.2.7.4] (L1) Ensure noexec option set on /var/log/audit partition
+rhel9cis_rule_1_2_1_2: true  # [1.2.1.2] (L1) Ensure gpgcheck is globally activated
+rhel9cis_rule_1_3_1_1: true  # [1.3.1.1] (L1) Ensure SELinux is installed
+rhel9cis_rule_1_3_1_2: true  # [1.3.1.2] (L1) Ensure SELinux is not disabled in bootloader configuration
+rhel9cis_rule_1_3_1_3: true  # [1.3.1.3] (L1) Ensure SELinux policy is configured
+rhel9cis_rule_1_3_1_4: true  # [1.3.1.4] (L1) Ensure the SELinux mode is not disabled
+rhel9cis_rule_1_3_1_5: true  # [1.3.1.5] (L2) Ensure the SELinux mode is enforcing
+rhel9cis_rule_1_3_1_7: true  # [1.3.1.7] (L1) Ensure the MCS Translation Service (mcstrans) is not installed
+rhel9cis_rule_1_3_1_8: true  # [1.3.1.8] (L1) Ensure SETroubleshoot is not installed
+rhel9cis_rule_1_4_1: true  # [1.4.1] (L1) Ensure bootloader password is set
+rhel9cis_rule_1_4_2: true  # [1.4.2] (L1) Ensure access to bootloader config is configured
+rhel9cis_rule_1_5_1: true  # [1.5.1] (L1) Ensure address space layout randomization is enabled
+rhel9cis_rule_1_5_2: true  # [1.5.2] (L1) Ensure ptrace_scope is restricted
+rhel9cis_rule_1_5_3: true  # [1.5.3] (L1) Ensure core dump backtraces are disabled
+rhel9cis_rule_1_5_4: true  # [1.5.4] (L1) Ensure core dump storage is disabled
+rhel9cis_rule_1_6_1: true  # [1.6.1] (L1) Ensure system wide crypto policy is not set to legacy
+rhel9cis_rule_1_6_2: true  # [1.6.2] (L1) Ensure system wide crypto policy is not set in sshd configuration
+rhel9cis_rule_1_6_3: true  # [1.6.3] (L1) Ensure system wide crypto policy disables sha1 hash and signature support
+rhel9cis_rule_1_6_4: true  # [1.6.4] (L1) Ensure system wide crypto policy disables macs less than 128 bits
+rhel9cis_rule_1_6_5: true  # [1.6.5] (L1) Ensure system wide crypto policy disables cbc for ssh
+rhel9cis_rule_1_7_1: true  # [1.7.1] (L1) Ensure message of the day is configured properly
+rhel9cis_rule_1_7_2: true  # [1.7.2] (L1) Ensure local login warning banner is configured properly
+rhel9cis_rule_1_7_3: true  # [1.7.3] (L1) Ensure remote login warning banner is configured properly
+rhel9cis_rule_1_7_4: true  # [1.7.4] (L1) Ensure access to /etc/motd is configured
+rhel9cis_rule_1_7_5: true  # [1.7.5] (L1) Ensure access to /etc/issue is configured
+rhel9cis_rule_1_7_6: true  # [1.7.6] (L1) Ensure access to /etc/issue.net is configured
+rhel9cis_rule_1_8_1: true  # [1.8.1] (L2) Ensure GNOME Display Manager is removed
+rhel9cis_rule_1_8_2: true  # [1.8.2] (L1) Ensure GDM login banner is configured
+rhel9cis_rule_1_8_3: true  # [1.8.3] (L1) Ensure GDM disable-user-list option is enabled
+rhel9cis_rule_1_8_4: true  # [1.8.4] (L1) Ensure GDM screen locks when the user is idle
+rhel9cis_rule_1_8_5: true  # [1.8.5] (L1) Ensure GDM screen locks cannot be overridden
+rhel9cis_rule_1_8_6: true  # [1.8.6] (L1) Ensure GDM automatic mounting of removable media is disabled
+rhel9cis_rule_1_8_7: true  # [1.8.7] (L1) Ensure GDM disabling automatic mounting of removable media is not overridden
+rhel9cis_rule_1_8_8: true  # [1.8.8] (L1) Ensure GDM autorun-never is enabled
+rhel9cis_rule_1_8_9: true  # [1.8.9] (L1) Ensure GDM autorun-never is not overridden
+rhel9cis_rule_1_8_10: true  # [1.8.10] (L1) Ensure XDMCP is not enabled
+
+# --- Section 2 Services ------------------------------
+rhel9cis_rule_2_1_1: true  # [2.1.1] (L1) Ensure autofs services are not in use
+rhel9cis_rule_2_1_2: true  # [2.1.2] (L1) Ensure avahi daemon services are not in use
+rhel9cis_rule_2_1_3: true  # [2.1.3] (L1) Ensure dhcp server services are not in use
+rhel9cis_rule_2_1_4: true  # [2.1.4] (L1) Ensure dns server services are not in use
+rhel9cis_rule_2_1_5: true  # [2.1.5] (L1) Ensure dnsmasq services are not in use
+rhel9cis_rule_2_1_6: true  # [2.1.6] (L1) Ensure samba file server services are not in use
+rhel9cis_rule_2_1_7: true  # [2.1.7] (L1) Ensure ftp server services are not in use
+rhel9cis_rule_2_1_8: true  # [2.1.8] (L1) Ensure message access server services are not in use
+rhel9cis_rule_2_1_9: true  # [2.1.9] (L1) Ensure network file system services are not in use
+rhel9cis_rule_2_1_10: true  # [2.1.10] (L1) Ensure nis server services are not in use
+rhel9cis_rule_2_1_11: true  # [2.1.11] (L1) Ensure print server services are not in use
+rhel9cis_rule_2_1_12: true  # [2.1.12] (L1) Ensure rpcbind services are not in use
+rhel9cis_rule_2_1_13: true  # [2.1.13] (L1) Ensure rsync services are not in use
+rhel9cis_rule_2_1_14: true  # [2.1.14] (L1) Ensure snmp services are not in use
+rhel9cis_rule_2_1_15: true  # [2.1.15] (L1) Ensure telnet server services are not in use
+rhel9cis_rule_2_1_16: true  # [2.1.16] (L1) Ensure tftp server services are not in use
+rhel9cis_rule_2_1_17: true  # [2.1.17] (L1) Ensure web proxy server services are not in use
+rhel9cis_rule_2_1_18: true  # [2.1.18] (L1) Ensure web server services are not in use
+rhel9cis_rule_2_1_19: true  # [2.1.19] (L1) Ensure xinetd services are not in use
+rhel9cis_rule_2_1_20: true  # [2.1.20] (L2) Ensure X window server services are not in use
+rhel9cis_rule_2_1_21: true  # [2.1.21] (L1) Ensure mail transfer agents are configured for local-only mode
+rhel9cis_rule_2_2_1: true  # [2.2.1] (L1) Ensure ftp client is not installed
+rhel9cis_rule_2_2_2: true  # [2.2.2] (L2) Ensure ldap client is not installed
+rhel9cis_rule_2_2_3: true  # [2.2.3] (L1) Ensure nis client is not installed
+rhel9cis_rule_2_2_4: true  # [2.2.4] (L1) Ensure telnet client is not installed
+rhel9cis_rule_2_2_5: true  # [2.2.5] (L1) Ensure tftp client is not installed
+rhel9cis_rule_2_3_1: true  # [2.3.1] (L1) Ensure time synchronization is in use
+rhel9cis_rule_2_3_2: true  # [2.3.2] (L1) Ensure chrony is configured
+rhel9cis_rule_2_3_3: true  # [2.3.3] (L1) Ensure chrony is not run as the root user
+rhel9cis_rule_2_4_1_1: true  # [2.4.1.1] (L1) Ensure cron daemon is enabled and active
+rhel9cis_rule_2_4_1_2: true  # [2.4.1.2] (L1) Ensure permissions on /etc/crontab are configured
+rhel9cis_rule_2_4_1_3: true  # [2.4.1.3] (L1) Ensure permissions on /etc/cron.hourly are configured
+rhel9cis_rule_2_4_1_4: true  # [2.4.1.4] (L1) Ensure permissions on /etc/cron.daily are configured
+rhel9cis_rule_2_4_1_5: true  # [2.4.1.5] (L1) Ensure permissions on /etc/cron.weekly are configured
+rhel9cis_rule_2_4_1_6: true  # [2.4.1.6] (L1) Ensure permissions on /etc/cron.monthly are configured
+rhel9cis_rule_2_4_1_7: true  # [2.4.1.7] (L1) Ensure permissions on /etc/cron.d are configured
+rhel9cis_rule_2_4_1_8: true  # [2.4.1.8] (L1) Ensure crontab is restricted to authorized users
+rhel9cis_rule_2_4_2_1: true  # [2.4.2.1] (L1) Ensure at is restricted to authorized users
+
+# --- Section 3 Network -------------------------------
+rhel9cis_rule_3_1_2: true  # [3.1.2] (L1) Ensure wireless interfaces are disabled
+rhel9cis_rule_3_1_3: true  # [3.1.3] (L1) Ensure bluetooth services are not in use
+rhel9cis_rule_3_2_1: true  # [3.2.1] (L2) Ensure dccp kernel module is not available
+rhel9cis_rule_3_2_2: true  # [3.2.2] (L2) Ensure tipc kernel module is not available
+rhel9cis_rule_3_2_3: true  # [3.2.3] (L2) Ensure rds kernel module is not available
+rhel9cis_rule_3_2_4: true  # [3.2.4] (L2) Ensure sctp kernel module is not available
+rhel9cis_rule_3_3_1: true  # [3.3.1] (L1) Ensure ip forwarding is disabled
+rhel9cis_rule_3_3_2: true  # [3.3.2] (L1) Ensure packet redirect sending is disabled
+rhel9cis_rule_3_3_3: true  # [3.3.3] (L1) Ensure bogus icmp responses are ignored
+rhel9cis_rule_3_3_4: true  # [3.3.4] (L1) Ensure broadcast icmp requests are ignored
+rhel9cis_rule_3_3_5: true  # [3.3.5] (L1) Ensure icmp redirects are not accepted
+rhel9cis_rule_3_3_6: true  # [3.3.6] (L1) Ensure secure icmp redirects are not accepted
+rhel9cis_rule_3_3_7: true  # [3.3.7] (L1) Ensure reverse path filtering is enabled
+rhel9cis_rule_3_3_8: true  # [3.3.8] (L1) Ensure source routed packets are not accepted
+rhel9cis_rule_3_3_9: true  # [3.3.9] (L1) Ensure suspicious packets are logged
+rhel9cis_rule_3_3_10: true  # [3.3.10] (L1) Ensure tcp syn cookies is enabled
+rhel9cis_rule_3_3_11: true  # [3.3.11] (L1) Ensure ipv6 router advertisements are not accepted
+
+# --- Section 4 Firewall Configuration ----------------
+rhel9cis_rule_4_1_1: true  # [4.1.1] (L1) Ensure nftables is installed
+rhel9cis_rule_4_1_2: true  # [4.1.2] (L1) Ensure a single firewall configuration utility is in use
+rhel9cis_rule_4_2_2: true  # [4.2.2] (L1) Ensure firewalld loopback traffic is configured
+rhel9cis_rule_4_3_1: true  # [4.3.1] (L1) Ensure nftables base chains exist
+rhel9cis_rule_4_3_3: true  # [4.3.3] (L1) Ensure nftables default deny firewall policy
+rhel9cis_rule_4_3_4: true  # [4.3.4] (L1) Ensure nftables loopback traffic is configured
+
+# --- Section 5 Access, Authentication and Authorization -
+rhel9cis_rule_5_1_1: true  # [5.1.1] (L1) Ensure permissions on /etc/ssh/sshd_config are configured
+rhel9cis_rule_5_1_2: true  # [5.1.2] (L1) Ensure permissions on SSH private host key files are configured
+rhel9cis_rule_5_1_3: true  # [5.1.3] (L1) Ensure permissions on SSH public host key files are configured
+rhel9cis_rule_5_1_4: true  # [5.1.4] (L1) Ensure sshd Ciphers are configured
+rhel9cis_rule_5_1_5: true  # [5.1.5] (L1) Ensure sshd KexAlgorithms is configured
+rhel9cis_rule_5_1_6: true  # [5.1.6] (L1) Ensure sshd MACs are configured
+rhel9cis_rule_5_1_7: true  # [5.1.7] (L1) Ensure sshd access is configured
+rhel9cis_rule_5_1_8: true  # [5.1.8] (L1) Ensure sshd Banner is configured
+rhel9cis_rule_5_1_9: true  # [5.1.9] (L1) Ensure sshd ClientAliveInterval and ClientAliveCountMax are configured
+rhel9cis_rule_5_1_10: true  # [5.1.10] (L2) Ensure sshd DisableForwarding is enabled
+rhel9cis_rule_5_1_11: true  # [5.1.11] (L2) Ensure sshd GSSAPIAuthentication is disabled
+rhel9cis_rule_5_1_12: true  # [5.1.12] (L1) Ensure sshd HostbasedAuthentication is disabled
+rhel9cis_rule_5_1_13: true  # [5.1.13] (L1) Ensure sshd IgnoreRhosts is enabled
+rhel9cis_rule_5_1_14: true  # [5.1.14] (L1) Ensure sshd LoginGraceTime is configured
+rhel9cis_rule_5_1_15: true  # [5.1.15] (L1) Ensure sshd LogLevel is configured
+rhel9cis_rule_5_1_16: true  # [5.1.16] (L1) Ensure sshd MaxAuthTries is configured
+rhel9cis_rule_5_1_17: true  # [5.1.17] (L1) Ensure sshd MaxStartups is configured
+rhel9cis_rule_5_1_18: true  # [5.1.18] (L1) Ensure sshd MaxSessions is configured
+rhel9cis_rule_5_1_19: true  # [5.1.19] (L1) Ensure sshd PermitEmptyPasswords is disabled
+rhel9cis_rule_5_1_20: true  # [5.1.20] (L1) Ensure sshd PermitRootLogin is disabled
+rhel9cis_rule_5_1_21: true  # [5.1.21] (L1) Ensure sshd PermitUserEnvironment is disabled
+rhel9cis_rule_5_1_22: true  # [5.1.22] (L1) Ensure sshd UsePAM is enabled
+rhel9cis_rule_5_2_1: true  # [5.2.1] (L1) Ensure sudo is installed
+rhel9cis_rule_5_2_2: true  # [5.2.2] (L1) Ensure sudo commands use pty
+rhel9cis_rule_5_2_3: true  # [5.2.3] (L1) Ensure sudo log file exists
+rhel9cis_rule_5_2_4: true  # [5.2.4] (L2) Ensure users must provide password for escalation
+rhel9cis_rule_5_2_5: true  # [5.2.5] (L1) Ensure re-authentication for privilege escalation is not disabled globally
+rhel9cis_rule_5_2_6: true  # [5.2.6] (L1) Ensure sudo authentication timeout is configured correctly
+rhel9cis_rule_5_2_7: true  # [5.2.7] (L1) Ensure access to the su command is restricted
+rhel9cis_rule_5_3_1_1: true  # [5.3.1.1] (L1) Ensure latest version of pam is installed
+rhel9cis_rule_5_3_1_2: true  # [5.3.1.2] (L1) Ensure latest version of authselect is installed
+rhel9cis_rule_5_3_1_3: true  # [5.3.1.3] (L1) Ensure latest version of libpwquality is installed
+rhel9cis_rule_5_3_2_1: true  # [5.3.2.1] (L1) Ensure active authselect profile includes pam modules
+rhel9cis_rule_5_3_2_2: true  # [5.3.2.2] (L1) Ensure pam_faillock module is enabled
+rhel9cis_rule_5_3_2_3: true  # [5.3.2.3] (L1) Ensure pam_pwquality module is enabled
+rhel9cis_rule_5_3_2_4: true  # [5.3.2.4] (L1) Ensure pam_pwhistory module is enabled
+rhel9cis_rule_5_3_2_5: true  # [5.3.2.5] (L1) Ensure pam_unix module is enabled
+rhel9cis_rule_5_3_3_1_1: true  # [5.3.3.1.1] (L1) Ensure password failed attempts lockout is configured
+rhel9cis_rule_5_3_3_1_2: true  # [5.3.3.1.2] (L1) Ensure password unlock time is configured
+rhel9cis_rule_5_3_3_1_3: true  # [5.3.3.1.3] (L2) Ensure password failed attempts lockout includes root account
+rhel9cis_rule_5_3_3_2_1: true  # [5.3.3.2.1] (L1) Ensure password number of changed characters is configured
+rhel9cis_rule_5_3_3_2_2: true  # [5.3.3.2.2] (L1) Ensure password length is configured
+rhel9cis_rule_5_3_3_2_4: true  # [5.3.3.2.4] (L1) Ensure password same consecutive characters is configured
+rhel9cis_rule_5_3_3_2_5: true  # [5.3.3.2.5] (L1) Ensure password maximum sequential characters is configured
+rhel9cis_rule_5_3_3_2_6: true  # [5.3.3.2.6] (L1) Ensure password dictionary check is enabled
+rhel9cis_rule_5_3_3_2_7: true  # [5.3.3.2.7] (L1) Ensure password quality is enforced for the root user
+rhel9cis_rule_5_3_3_3_1: true  # [5.3.3.3.1] (L1) Ensure password history remember is configured
+rhel9cis_rule_5_3_3_3_2: true  # [5.3.3.3.2] (L1) Ensure password history is enforced for the root user
+rhel9cis_rule_5_3_3_3_3: true  # [5.3.3.3.3] (L1) Ensure pam_pwhistory includes use_authtok
+rhel9cis_rule_5_3_3_4_1: true  # [5.3.3.4.1] (L1) Ensure pam_unix does not include nullok
+rhel9cis_rule_5_3_3_4_2: true  # [5.3.3.4.2] (L1) Ensure pam_unix does not include remember
+rhel9cis_rule_5_3_3_4_3: true  # [5.3.3.4.3] (L1) Ensure pam_unix includes a strong password hashing algorithm
+rhel9cis_rule_5_3_3_4_4: true  # [5.3.3.4.4] (L1) Ensure pam_unix includes use_authtok
+rhel9cis_rule_5_4_1_1: true  # [5.4.1.1] (L1) Ensure password expiration is configured
+rhel9cis_rule_5_4_1_3: true  # [5.4.1.3] (L1) Ensure password expiration warning days is configured
+rhel9cis_rule_5_4_1_4: true  # [5.4.1.4] (L1) Ensure strong password hashing algorithm is configured
+rhel9cis_rule_5_4_1_5: true  # [5.4.1.5] (L1) Ensure inactive password lock is configured
+rhel9cis_rule_5_4_1_6: true  # [5.4.1.6] (L1) Ensure all users last password change date is in the past
+rhel9cis_rule_5_4_2_1: true  # [5.4.2.1] (L1) Ensure root is the only UID 0 account
+rhel9cis_rule_5_4_2_2: true  # [5.4.2.2] (L1) Ensure root is the only GID 0 account
+rhel9cis_rule_5_4_2_3: true  # [5.4.2.3] (L1) Ensure group root is the only GID 0 group
+rhel9cis_rule_5_4_2_5: true  # [5.4.2.5] (L1) Ensure root path integrity
+rhel9cis_rule_5_4_2_6: true  # [5.4.2.6] (L1) Ensure root user umask is configured
+rhel9cis_rule_5_4_2_7: true  # [5.4.2.7] (L1) Ensure system accounts do not have a valid login shell
+rhel9cis_rule_5_4_2_8: true  # [5.4.2.8] (L1) Ensure accounts without a valid login shell are locked
+rhel9cis_rule_5_4_3_1: true  # [5.4.3.1] (L2) Ensure nologin is not listed in /etc/shells
+rhel9cis_rule_5_4_3_2: true  # [5.4.3.2] (L1) Ensure default user shell timeout is configured
+rhel9cis_rule_5_4_3_3: true  # [5.4.3.3] (L1) Ensure default user umask is configured
+
+# --- Section 6 Logging, Auditing and System Maintenance -
+rhel9cis_rule_6_1_1: true  # [6.1.1] (L1) Ensure AIDE is installed
+rhel9cis_rule_6_1_2: true  # [6.1.2] (L1) Ensure filesystem integrity is regularly checked
+rhel9cis_rule_6_1_3: true  # [6.1.3] (L1) Ensure cryptographic mechanisms are used to protect the integrity of audit tools
+rhel9cis_rule_6_2_1_1: true  # [6.2.1.1] (L1) Ensure journald service is enabled and active
+rhel9cis_rule_6_2_1_4: true  # [6.2.1.4] (L1) Ensure only one logging system is in use
+rhel9cis_rule_6_2_2_1_1: true  # [6.2.2.1.1] (L1) Ensure systemd-journal-remote is installed
+rhel9cis_rule_6_2_2_1_3: true  # [6.2.2.1.3] (L1) Ensure systemd-journal-upload is enabled and active
+rhel9cis_rule_6_2_2_1_4: true  # [6.2.2.1.4] (L1) Ensure systemd-journal-remote service is not in use
+rhel9cis_rule_6_2_2_2: true  # [6.2.2.2] (L1) Ensure journald ForwardToSyslog is disabled
+rhel9cis_rule_6_2_2_3: true  # [6.2.2.3] (L1) Ensure journald Compress is configured
+rhel9cis_rule_6_2_2_4: true  # [6.2.2.4] (L1) Ensure journald Storage is configured
+rhel9cis_rule_6_2_3_1: true  # [6.2.3.1] (L1) Ensure rsyslog is installed
+rhel9cis_rule_6_2_3_2: true  # [6.2.3.2] (L1) Ensure rsyslog service is enabled and active
+rhel9cis_rule_6_2_3_3: true  # [6.2.3.3] (L1) Ensure journald is configured to send logs to rsyslog
+rhel9cis_rule_6_2_3_4: true  # [6.2.3.4] (L1) Ensure rsyslog log file creation mode is configured
+rhel9cis_rule_6_2_3_7: true  # [6.2.3.7] (L1) Ensure rsyslog is not configured to receive logs from a remote client
+rhel9cis_rule_6_2_4_1: true  # [6.2.4.1] (L1) Ensure access to all logfiles has been configured
+rhel9cis_rule_6_3_1_1: true  # [6.3.1.1] (L2) Ensure auditd packages are installed
+rhel9cis_rule_6_3_1_2: true  # [6.3.1.2] (L2) Ensure auditing for processes that start prior to auditd is enabled
+rhel9cis_rule_6_3_1_3: true  # [6.3.1.3] (L2) Ensure audit_backlog_limit is sufficient
+rhel9cis_rule_6_3_1_4: true  # [6.3.1.4] (L2) Ensure auditd service is enabled and active
+rhel9cis_rule_6_3_2_1: true  # [6.3.2.1] (L2) Ensure audit log storage size is configured
+rhel9cis_rule_6_3_2_2: true  # [6.3.2.2] (L2) Ensure audit logs are not automatically deleted
+rhel9cis_rule_6_3_2_3: true  # [6.3.2.3] (L2) Ensure system is disabled when audit logs are full
+rhel9cis_rule_6_3_2_4: true  # [6.3.2.4] (L2) Ensure system warns when audit logs are low on space
+rhel9cis_rule_6_3_3_1: true  # [6.3.3.1] (L2) Ensure changes to system administration scope (sudoers) is collected
+rhel9cis_rule_6_3_3_2: true  # [6.3.3.2] (L2) Ensure actions as another user are always logged
+rhel9cis_rule_6_3_3_3: true  # [6.3.3.3] (L2) Ensure events that modify the sudo log file are collected
+rhel9cis_rule_6_3_3_4: true  # [6.3.3.4] (L2) Ensure events that modify date and time information are collected
+rhel9cis_rule_6_3_3_5: true  # [6.3.3.5] (L2) Ensure events that modify the system's network environment are collected
+rhel9cis_rule_6_3_3_6: true  # [6.3.3.6] (L2) Ensure use of privileged commands are collected
+rhel9cis_rule_6_3_3_7: true  # [6.3.3.7] (L2) Ensure unsuccessful file access attempts are collected
+rhel9cis_rule_6_3_3_8: true  # [6.3.3.8] (L2) Ensure events that modify user/group information are collected
+rhel9cis_rule_6_3_3_9: true  # [6.3.3.9] (L2) Ensure discretionary access control permission modification events are collected
+rhel9cis_rule_6_3_3_10: true  # [6.3.3.10] (L2) Ensure successful file system mounts are collected
+rhel9cis_rule_6_3_3_11: true  # [6.3.3.11] (L2) Ensure session initiation information is collected
+rhel9cis_rule_6_3_3_12: true  # [6.3.3.12] (L2) Ensure login and logout events are collected
+rhel9cis_rule_6_3_3_13: true  # [6.3.3.13] (L2) Ensure file deletion events by users are collected
+rhel9cis_rule_6_3_3_14: true  # [6.3.3.14] (L2) Ensure events that modify the system's Mandatory Access Controls are collected
+rhel9cis_rule_6_3_3_15: true  # [6.3.3.15] (L2) Ensure successful and unsuccessful attempts to use the chcon command are collected
+rhel9cis_rule_6_3_3_16: true  # [6.3.3.16] (L2) Ensure successful and unsuccessful attempts to use the setfacl command are collected
+rhel9cis_rule_6_3_3_17: true  # [6.3.3.17] (L2) Ensure successful and unsuccessful attempts to use the chacl command are collected
+rhel9cis_rule_6_3_3_18: true  # [6.3.3.18] (L2) Ensure successful and unsuccessful attempts to use the usermod command are collected
+rhel9cis_rule_6_3_3_19: true  # [6.3.3.19] (L2) Ensure kernel module loading unloading and modification is collected
+rhel9cis_rule_6_3_3_20: true  # [6.3.3.20] (L2) Ensure the audit configuration is immutable
+rhel9cis_rule_6_3_4_1: true  # [6.3.4.1] (L2) Ensure the audit log file directory mode is configured
+rhel9cis_rule_6_3_4_2: true  # [6.3.4.2] (L2) Ensure audit log files mode is configured
+rhel9cis_rule_6_3_4_3: true  # [6.3.4.3] (L2) Ensure audit log files owner is configured
+rhel9cis_rule_6_3_4_4: true  # [6.3.4.4] (L2) Ensure audit log files group owner is configured
+rhel9cis_rule_6_3_4_5: true  # [6.3.4.5] (L2) Ensure audit configuration files mode is configured
+rhel9cis_rule_6_3_4_6: true  # [6.3.4.6] (L2) Ensure audit configuration files owner is configured
+rhel9cis_rule_6_3_4_7: true  # [6.3.4.7] (L2) Ensure audit configuration files group owner is configured
+rhel9cis_rule_6_3_4_8: true  # [6.3.4.8] (L2) Ensure audit tools mode is configured
+rhel9cis_rule_6_3_4_9: true  # [6.3.4.9] (L2) Ensure audit tools owner is configured
+rhel9cis_rule_6_3_4_10: true  # [6.3.4.10] (L2) Ensure audit tools group owner is configured
+
+# --- Section 7 System Maintenance --------------------
+rhel9cis_rule_7_1_1: true  # [7.1.1] (L1) Ensure permissions on /etc/passwd are configured
+rhel9cis_rule_7_1_2: true  # [7.1.2] (L1) Ensure permissions on /etc/passwd- are configured
+rhel9cis_rule_7_1_3: true  # [7.1.3] (L1) Ensure permissions on /etc/group are configured
+rhel9cis_rule_7_1_4: true  # [7.1.4] (L1) Ensure permissions on /etc/group- are configured
+rhel9cis_rule_7_1_5: true  # [7.1.5] (L1) Ensure permissions on /etc/shadow are configured
+rhel9cis_rule_7_1_6: true  # [7.1.6] (L1) Ensure permissions on /etc/shadow- are configured
+rhel9cis_rule_7_1_7: true  # [7.1.7] (L1) Ensure permissions on /etc/gshadow are configured
+rhel9cis_rule_7_1_8: true  # [7.1.8] (L1) Ensure permissions on /etc/gshadow- are configured
+rhel9cis_rule_7_1_9: true  # [7.1.9] (L1) Ensure permissions on /etc/shells are configured
+rhel9cis_rule_7_1_10: true  # [7.1.10] (L1) Ensure permissions on /etc/security/opasswd are configured
+rhel9cis_rule_7_1_11: true  # [7.1.11] (L1) Ensure world writable files and directories are secured
+rhel9cis_rule_7_1_12: true  # [7.1.12] (L1) Ensure no files or directories without an owner and a group exist
+rhel9cis_rule_7_2_1: true  # [7.2.1] (L1) Ensure accounts in /etc/passwd use shadowed passwords
+rhel9cis_rule_7_2_2: true  # [7.2.2] (L1) Ensure /etc/shadow password fields are not empty
+rhel9cis_rule_7_2_3: true  # [7.2.3] (L1) Ensure all groups in /etc/passwd exist in /etc/group
+rhel9cis_rule_7_2_4: true  # [7.2.4] (L1) Ensure no duplicate UIDs exist
+rhel9cis_rule_7_2_5: true  # [7.2.5] (L1) Ensure no duplicate GIDs exist
+rhel9cis_rule_7_2_6: true  # [7.2.6] (L1) Ensure no duplicate user names exist
+rhel9cis_rule_7_2_7: true  # [7.2.7] (L1) Ensure no duplicate group names exist
+rhel9cis_rule_7_2_8: true  # [7.2.8] (L1) Ensure local interactive user home directories are configured
+rhel9cis_rule_7_2_9: true  # [7.2.9] (L1) Ensure local interactive user dot files access is configured

@@ -1,0 +1,33 @@
+---
+# 3.2 - Modulos de kernel de protocolos de red no comunes (Nivel 2)
+rhel9cis_net_kernel_modules:
+  - { id: "3.2.1", module: dccp, level: 2 }
+  - { id: "3.2.2", module: tipc, level: 2 }
+  - { id: "3.2.3", module: rds, level: 2 }
+  - { id: "3.2.4", module: sctp, level: 2 }
+
+# 3.3 - Parametros de red del kernel (sysctl), todos Nivel 1
+rhel9cis_net_sysctl:
+  - { id: "3.3.1", key: net.ipv4.ip_forward, value: 0, level: 1 }
+  - { id: "3.3.1", key: net.ipv6.conf.all.forwarding, value: 0, level: 1 }
+  - { id: "3.3.2", key: net.ipv4.conf.all.send_redirects, value: 0, level: 1 }
+  - { id: "3.3.2", key: net.ipv4.conf.default.send_redirects, value: 0, level: 1 }
+  - { id: "3.3.3", key: net.ipv4.icmp_ignore_bogus_error_responses, value: 1, level: 1 }
+  - { id: "3.3.4", key: net.ipv4.icmp_echo_ignore_broadcasts, value: 1, level: 1 }
+  - { id: "3.3.5", key: net.ipv4.conf.all.accept_redirects, value: 0, level: 1 }
+  - { id: "3.3.5", key: net.ipv4.conf.default.accept_redirects, value: 0, level: 1 }
+  - { id: "3.3.5", key: net.ipv6.conf.all.accept_redirects, value: 0, level: 1 }
+  - { id: "3.3.5", key: net.ipv6.conf.default.accept_redirects, value: 0, level: 1 }
+  - { id: "3.3.6", key: net.ipv4.conf.all.secure_redirects, value: 0, level: 1 }
+  - { id: "3.3.6", key: net.ipv4.conf.default.secure_redirects, value: 0, level: 1 }
+  - { id: "3.3.7", key: net.ipv4.conf.all.rp_filter, value: 1, level: 1 }
+  - { id: "3.3.7", key: net.ipv4.conf.default.rp_filter, value: 1, level: 1 }
+  - { id: "3.3.8", key: net.ipv4.conf.all.accept_source_route, value: 0, level: 1 }
+  - { id: "3.3.8", key: net.ipv4.conf.default.accept_source_route, value: 0, level: 1 }
+  - { id: "3.3.8", key: net.ipv6.conf.all.accept_source_route, value: 0, level: 1 }
+  - { id: "3.3.8", key: net.ipv6.conf.default.accept_source_route, value: 0, level: 1 }
+  - { id: "3.3.9", key: net.ipv4.conf.all.log_martians, value: 1, level: 1 }
+  - { id: "3.3.9", key: net.ipv4.conf.default.log_martians, value: 1, level: 1 }
+  - { id: "3.3.10", key: net.ipv4.tcp_syncookies, value: 1, level: 1 }
+  - { id: "3.3.11", key: net.ipv6.conf.all.accept_ra, value: 0, level: 1 }
+  - { id: "3.3.11", key: net.ipv6.conf.default.accept_ra, value: 0, level: 1 }

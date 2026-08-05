@@ -1,0 +1,14 @@
+# {{ ansible_managed }}
+# CIS RHEL9 - GDM/GNOME hardening: bloqueo de claves dconf para que el usuario no las sobrescriba
+{% if rhel9cis_rule_1_8_5 | default(false) | bool %}
+/org/gnome/desktop/session/idle-delay
+/org/gnome/desktop/screensaver/lock-enabled
+/org/gnome/desktop/screensaver/lock-delay
+{% endif %}
+{% if rhel9cis_rule_1_8_7 | default(false) | bool %}
+/org/gnome/desktop/media-handling/automount
+/org/gnome/desktop/media-handling/automount-open
+{% endif %}
+{% if rhel9cis_rule_1_8_9 | default(false) | bool %}
+/org/gnome/desktop/media-handling/autorun-never
+{% endif %}

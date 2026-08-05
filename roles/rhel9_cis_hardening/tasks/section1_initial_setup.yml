@@ -1,0 +1,417 @@
+---
+# CIS RHEL9 - Section 1: Initial Setup
+
+- name: Cargar datos de la seccion 1.1 (filesystem)
+  ansible.builtin.include_vars: section1_filesystem.yml
+  tags: always
+
+# --- 1.1.1 Filesystem kernel modules --------------------------------------------------
+- name: 1.1.1.x - Deshabilitar modulos de kernel de filesystems no utilizados
+  ansible.builtin.copy:
+    dest: "/etc/modprobe.d/cis-{{ item.module }}.conf"
+    content: |
+      install {{ item.module }} /bin/false
+      blacklist {{ item.module }}
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  loop: "{{ rhel9cis_fs_kernel_modules }}"
+  loop_control:
+    label: "{{ item.id }} {{ item.module }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= item.level
+  tags: ["1.1.1.1", "1.1.1.2", "1.1.1.3", "1.1.1.4", "1.1.1.5", "1.1.1.6", "1.1.1.7", "1.1.1.8", "level1", "level2", "server"]
+
+- name: 1.1.1.x - Descargar del kernel los modulos de filesystem deshabilitados si estan cargados
+  community.general.modprobe:
+    name: "{{ item.module }}"
+    state: absent
+  loop: "{{ rhel9cis_fs_kernel_modules }}"
+  loop_control:
+    label: "{{ item.id }} {{ item.module }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= item.level
+  failed_when: false
+  tags: ["1.1.1.1", "1.1.1.2", "1.1.1.3", "1.1.1.4", "1.1.1.5", "1.1.1.6", "1.1.1.7", "1.1.1.8", "level1", "level2", "server"]
+
+# --- 1.1.2 Particiones separadas (auditoria, no destructivo) --------------------------
+- name: 1.1.2.x.1 - Auditar que existan particiones separadas requeridas por CIS
+  ansible.builtin.assert:
+    that:
+      - (ansible_facts.mounts | selectattr('mount', 'equalto', item.path) | list | length) > 0
+    fail_msg: >-
+      [{{ item.id }}] {{ item.path }} NO es un punto de montaje/particion separada.
+      Remediacion manual requerida (crear volumen LVM dedicado y migrar datos);
+      ver docs/coverage_matrix.csv para el detalle.
+    success_msg: "[{{ item.id }}] {{ item.path }} es una particion separada. OK."
+    quiet: true
+  loop: "{{ rhel9cis_separate_partitions }}"
+  loop_control:
+    label: "{{ item.id }} {{ item.path }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= item.level
+    - not rhel9cis_is_container | bool
+  ignore_errors: true
+  tags: ["1.1.2.1.1", "1.1.2.2.1", "1.1.2.3.1", "1.1.2.4.1", "1.1.2.5.1", "1.1.2.6.1", "1.1.2.7.1", "level1", "level2", "server"]
+
+# --- 1.1.2 Opciones de montaje nodev/nosuid/noexec -------------------------------------
+- name: 1.1.2.x.{2,3,4} - Endurecer opciones de montaje (nodev/nosuid/noexec) en particiones separadas
+  ansible.posix.mount:
+    path: "{{ item.path }}"
+    src: "{{ mnt.device }}"
+    fstype: "{{ mnt.fstype }}"
+    opts: "{{ desired_opts | reject('equalto', '') | unique | join(',') }}"
+    state: mounted
+  vars:
+    mnt: "{{ (ansible_facts.mounts | selectattr('mount', 'equalto', item.path) | list | first) | default({}) }}"
+    base_opts: "{{ (mnt.options | default('')).split(',') | reject('equalto', 'defaults') | list }}"
+    add_nodev: "{{ (item.nodev is defined) and (lookup('vars', 'rhel9cis_rule_' + item.nodev.id | replace('.', '_')) | bool) }}"
+    add_nosuid: "{{ (item.nosuid is defined) and (lookup('vars', 'rhel9cis_rule_' + item.nosuid.id | replace('.', '_')) | bool) }}"
+    add_noexec: "{{ (item.noexec is defined) and (lookup('vars', 'rhel9cis_rule_' + item.noexec.id | replace('.', '_')) | bool) }}"
+    desired_opts: >-
+      {{ base_opts
+         + (['nodev'] if (add_nodev and 'nodev' not in base_opts) else [])
+         + (['nosuid'] if (add_nosuid and 'nosuid' not in base_opts) else [])
+         + (['noexec'] if (add_noexec and 'noexec' not in base_opts) else []) }}
+  loop: "{{ rhel9cis_partition_options }}"
+  loop_control:
+    label: "{{ item.path }}"
+  when:
+    - rhel9cis_level >= 1
+    - not rhel9cis_is_container | bool
+    - mnt != {}
+    - (add_nodev or add_nosuid or add_noexec)
+  notify: "mark reboot required"
+  tags: ["1.1.2.1.2", "1.1.2.1.3", "1.1.2.1.4", "1.1.2.2.2", "1.1.2.2.3", "1.1.2.2.4",
+         "1.1.2.3.2", "1.1.2.3.3", "1.1.2.4.2", "1.1.2.4.3", "1.1.2.5.2", "1.1.2.5.3",
+         "1.1.2.5.4", "1.1.2.6.2", "1.1.2.6.3", "1.1.2.6.4", "1.1.2.7.2", "1.1.2.7.3",
+         "1.1.2.7.4", "level1", "server"]
+
+# --- 1.2 Software updates ---------------------------------------------------------------
+- name: 1.2.1.2 - Asegurar que gpgcheck este activado globalmente en dnf.conf
+  ansible.builtin.lineinfile:
+    path: /etc/dnf/dnf.conf
+    regexp: '^\s*gpgcheck\s*='
+    line: "gpgcheck=1"
+    insertafter: '^\[main\]'
+    backup: true
+  when:
+    - rhel9cis_rule_1_2_1_2 | bool
+    - rhel9cis_level >= 1
+  tags: ["1.2.1.2", "level1", "server"]
+
+- name: 1.2.1.2 - Asegurar gpgcheck=1 en cada repo definido en /etc/yum.repos.d/*.repo
+  ansible.builtin.replace:
+    path: "{{ item }}"
+    regexp: '^gpgcheck\s*=\s*0\s*$'
+    replace: "gpgcheck=1"
+    backup: true
+  with_fileglob:
+    - /etc/yum.repos.d/*.repo
+  when:
+    - rhel9cis_rule_1_2_1_2 | bool
+    - rhel9cis_level >= 1
+  tags: ["1.2.1.2", "level1", "server"]
+
+# --- 1.3 SELinux -------------------------------------------------------------------------
+- name: 1.3.1.1 - Asegurar que libselinux este instalado
+  ansible.builtin.dnf:
+    name: libselinux
+    state: present
+  when:
+    - rhel9cis_rule_1_3_1_1 | bool
+    - rhel9cis_level >= 1
+  tags: ["1.3.1.1", "level1", "server"]
+
+- name: 1.3.1.2 - Asegurar que SELinux no este deshabilitado en la configuracion del bootloader
+  ansible.builtin.command: grubby --update-kernel ALL --remove-args "selinux=0 enforcing=0"
+  register: rhel9cis_selinux_grub
+  changed_when: "'selinux=0' in rhel9cis_selinux_grub.stdout or 'enforcing=0' in rhel9cis_selinux_grub.stdout or rhel9cis_selinux_grub.rc == 0"
+  failed_when: rhel9cis_selinux_grub.rc != 0
+  check_mode: false
+  when:
+    - rhel9cis_rule_1_3_1_2 | bool
+    - rhel9cis_level >= 1
+    - not rhel9cis_is_container | bool
+  notify: "mark reboot required"
+  tags: ["1.3.1.2", "level1", "server"]
+
+- name: 1.3.1.3 - Configurar SELINUXTYPE=targeted en /etc/selinux/config
+  ansible.builtin.lineinfile:
+    path: /etc/selinux/config
+    regexp: '^SELINUXTYPE\s*='
+    line: "SELINUXTYPE=targeted"
+    backup: true
+  when:
+    - rhel9cis_rule_1_3_1_3 | bool
+    - rhel9cis_level >= 1
+  notify: "mark reboot required"
+  tags: ["1.3.1.3", "level1", "server"]
+
+- name: 1.3.1.4 - Asegurar que el modo de SELinux no este "disabled" (enforcing por politica)
+  ansible.builtin.lineinfile:
+    path: /etc/selinux/config
+    regexp: '^SELINUX\s*='
+    line: "SELINUX=enforcing"
+    backup: true
+  when:
+    - rhel9cis_rule_1_3_1_4 | bool
+    - rhel9cis_level >= 1
+  notify: "mark reboot required"
+  tags: ["1.3.1.4", "level1", "server"]
+
+- name: 1.3.1.5 (Nivel 2) - Asegurar que el modo de SELinux activo sea "enforcing"
+  ansible.posix.selinux:
+    policy: targeted
+    state: enforcing
+  when:
+    - rhel9cis_rule_1_3_1_5 | bool
+    - rhel9cis_level >= 2
+    - not rhel9cis_is_container | bool
+  tags: ["1.3.1.5", "level2", "server"]
+
+- name: 1.3.1.7 - Asegurar que mcstrans no este instalado
+  ansible.builtin.dnf:
+    name: mcstrans
+    state: absent
+  when:
+    - rhel9cis_rule_1_3_1_7 | bool
+    - rhel9cis_level >= 1
+  tags: ["1.3.1.7", "level1", "server"]
+
+- name: 1.3.1.8 - Asegurar que setroubleshoot no este instalado
+  ansible.builtin.dnf:
+    name: setroubleshoot
+    state: absent
+  when:
+    - rhel9cis_rule_1_3_1_8 | bool
+    - rhel9cis_level >= 1
+  tags: ["1.3.1.8", "level1", "server"]
+
+# --- 1.4 Bootloader ------------------------------------------------------------------------
+- name: 1.4.1 - Fijar password de GRUB2 (solo si rhel9cis_grub_password esta definido via vault)
+  block:
+    - name: 1.4.1 - Verificar si ya existe configuracion de password de GRUB2
+      ansible.builtin.stat:
+        path: /boot/grub2/user.cfg
+      register: rhel9cis_grub_user_cfg
+
+    - name: 1.4.1 - Generar y aplicar password de GRUB2
+      ansible.builtin.shell: |
+        set -o pipefail
+        printf '%s\n%s\n' "{{ rhel9cis_grub_password }}" "{{ rhel9cis_grub_password }}" | grub2-setpassword
+      changed_when: true
+      when: not rhel9cis_grub_user_cfg.stat.exists
+      notify: "mark reboot required"
+  when:
+    - rhel9cis_rule_1_4_1 | bool
+    - rhel9cis_level >= 1
+    - rhel9cis_grub_password | length > 0
+    - not rhel9cis_is_container | bool
+  no_log: true
+  tags: ["1.4.1", "level1", "server"]
+
+- name: 1.4.2 - Fijar propietario y permisos de la configuracion de GRUB2 (BIOS)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop:
+    - /boot/grub2/grub.cfg
+    - /boot/grub2/grubenv
+  failed_when: false
+  when:
+    - rhel9cis_rule_1_4_2 | bool
+    - rhel9cis_level >= 1
+    - not rhel9cis_is_container | bool
+  tags: ["1.4.2", "level1", "server"]
+
+- name: 1.4.2 - Fijar permisos EFI (fmask/uid/gid) en /etc/fstab si el sistema usa UEFI
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '(^\S+\s+/boot/efi\s+vfat\s+)([^\s]+)(\s+.*)$'
+    replace: '\1defaults,umask=0027,fmask=0077,uid=0,gid=0\3'
+    backup: true
+  when:
+    - rhel9cis_rule_1_4_2 | bool
+    - rhel9cis_level >= 1
+    - ansible_facts['mounts'] | selectattr('mount', 'equalto', '/boot/efi') | list | length > 0
+  notify: "mark reboot required"
+  tags: ["1.4.2", "level1", "server"]
+
+# --- 1.5 Additional process hardening -------------------------------------------------------
+- name: 1.5.1/1.5.2 - Endurecer parametros de kernel (ASLR y ptrace_scope)
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/60-cis-kernel_sysctl.conf
+    state: present
+    reload: true
+  loop:
+    - { key: "kernel.randomize_va_space", value: "2", id: "1.5.1" }
+    - { key: "kernel.yama.ptrace_scope", value: "1", id: "1.5.2" }
+  loop_control:
+    label: "{{ item.id }} {{ item.key }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= 1
+  tags: ["1.5.1", "1.5.2", "level1", "server"]
+
+- name: 1.5.3/1.5.4 - Deshabilitar backtraces y almacenamiento de core dumps
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/coredump.conf.d/60-coredump.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    insertafter: '^\[Coredump\]'
+  loop:
+    - { regexp: '^\s*ProcessSizeMax\s*=', line: "ProcessSizeMax=0", id: "1.5.3" }
+    - { regexp: '^\s*Storage\s*=', line: "Storage=none", id: "1.5.4" }
+  loop_control:
+    label: "{{ item.id }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= 1
+  tags: ["1.5.3", "1.5.4", "level1", "server"]
+
+- name: 1.5.3/1.5.4 - Asegurar que exista la seccion [Coredump] en el drop-in de coredump
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/coredump.conf.d/60-coredump.conf
+    line: "[Coredump]"
+    insertbefore: BOF
+    create: true
+  when:
+    - (rhel9cis_rule_1_5_3 | bool) or (rhel9cis_rule_1_5_4 | bool)
+    - rhel9cis_level >= 1
+  tags: ["1.5.3", "1.5.4", "level1", "server"]
+
+# --- 1.6 System wide crypto policy ------------------------------------------------------
+- name: 1.6.1/1.6.3/1.6.4/1.6.5 - Aplicar politica criptografica de sistema con subpoliticas CIS
+  ansible.builtin.command: >-
+    update-crypto-policies --set {{ rhel9cis_crypto_policy_full }}
+  register: rhel9cis_crypto_result
+  changed_when: "'setting system policy' in rhel9cis_crypto_result.stdout or rhel9cis_crypto_result.rc == 0"
+  vars:
+    rhel9cis_crypto_subpolicies: >-
+      {{ (['NO-SHA1'] if (rhel9cis_rule_1_6_3 | bool and rhel9cis_level >= 1) else [])
+         + (['NO-WEAKMAC'] if (rhel9cis_rule_1_6_4 | bool and rhel9cis_level >= 1) else [])
+         + (['NO-SSHCBC'] if (rhel9cis_rule_1_6_5 | bool and rhel9cis_level >= 1) else []) }}
+    rhel9cis_crypto_policy_full: >-
+      {{ (['DEFAULT'] + rhel9cis_crypto_subpolicies) | join(':') }}
+  when:
+    - rhel9cis_rule_1_6_1 | bool
+    - rhel9cis_level >= 1
+  notify: "mark reboot required"
+  tags: ["1.6.1", "1.6.3", "1.6.4", "1.6.5", "level1", "server"]
+
+- name: 1.6.2 - Asegurar que la politica criptografica no se sobreescriba en /etc/sysconfig/sshd
+  ansible.builtin.replace:
+    path: /etc/sysconfig/sshd
+    regexp: '^\s*(CRYPTO_POLICY\s*=.*)$'
+    replace: '# \1'
+    backup: true
+  notify: "restart sshd"
+  when:
+    - rhel9cis_rule_1_6_2 | bool
+    - rhel9cis_level >= 1
+  tags: ["1.6.2", "level1", "server"]
+
+# --- 1.7 Command line warning banners ----------------------------------------------------
+- name: 1.7.1/1.7.2/1.7.3 - Desplegar banner de advertencia legal en motd, issue e issue.net
+  ansible.builtin.template:
+    src: banner.j2
+    dest: "{{ item.path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  loop:
+    - { path: /etc/motd, id: "1.7.1" }
+    - { path: /etc/issue, id: "1.7.2" }
+    - { path: /etc/issue.net, id: "1.7.3" }
+  loop_control:
+    label: "{{ item.id }} {{ item.path }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= 1
+  tags: ["1.7.1", "1.7.2", "1.7.3", "level1", "server"]
+
+- name: 1.7.4/1.7.5/1.7.6 - Fijar permisos de motd, issue e issue.net
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { path: /etc/motd, id: "1.7.4" }
+    - { path: /etc/issue, id: "1.7.5" }
+    - { path: /etc/issue.net, id: "1.7.6" }
+  loop_control:
+    label: "{{ item.id }} {{ item.path }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= 1
+  tags: ["1.7.4", "1.7.5", "1.7.6", "level1", "server"]
+
+# --- 1.8 GNOME Display Manager (solo si esta instalado) ----------------------------------
+- name: 1.8.1 (Nivel 2) - Asegurar que GDM este desinstalado (servidores sin interfaz grafica)
+  ansible.builtin.dnf:
+    name: gdm
+    state: absent
+  when:
+    - rhel9cis_rule_1_8_1 | bool
+    - rhel9cis_level >= 2
+    - "'gdm' in ansible_facts.packages"
+  tags: ["1.8.1", "level2", "server"]
+
+- name: 1.8.x - Desplegar configuracion dconf de endurecimiento de GDM/GNOME
+  ansible.builtin.copy:
+    dest: /etc/dconf/db/local.d/00-cis-gdm-settings
+    content: "{{ lookup('template', 'gdm-cis-settings.j2') }}"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  notify: "rebuild dconf database"
+  when:
+    - rhel9cis_level >= 1
+    - "'gdm' in ansible_facts.packages"
+    - not (rhel9cis_rule_1_8_1 | bool and rhel9cis_level >= 2)
+  tags: ["1.8.2", "1.8.3", "1.8.4", "1.8.6", "1.8.8", "level1", "server"]
+
+- name: 1.8.x - Desplegar bloqueos dconf (locks) de GDM/GNOME
+  ansible.builtin.copy:
+    dest: /etc/dconf/db/local.d/locks/00-cis-gdm-locks
+    content: "{{ lookup('template', 'gdm-cis-locks.j2') }}"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  notify: "rebuild dconf database"
+  when:
+    - rhel9cis_level >= 1
+    - "'gdm' in ansible_facts.packages"
+    - not (rhel9cis_rule_1_8_1 | bool and rhel9cis_level >= 2)
+  tags: ["1.8.5", "1.8.7", "1.8.9", "level1", "server"]
+
+- name: 1.8.10 - Asegurar que XDMCP no este habilitado en GDM
+  community.general.ini_file:
+    path: /etc/gdm/custom.conf
+    section: xdmcp
+    option: Enable
+    value: "false"
+    backup: true
+    mode: "0644"
+  when:
+    - rhel9cis_rule_1_8_10 | bool
+    - rhel9cis_level >= 1
+    - "'gdm' in ansible_facts.packages"
+  tags: ["1.8.10", "level1", "server"]

@@ -1,0 +1,494 @@
+---
+# CIS RHEL9 - Section 6 del benchmark (Logging and Auditing): AIDE, journald, rsyslog, auditd.
+# Nota: el archivo se llama section4_logging_auditing.yml por convencion interna de layout
+# de 6 archivos tasks/sectionN_*.yml (ver nota de mapeo en tasks/main.yml).
+
+- name: Cargar datos de reglas de auditd (seccion 6.3.3)
+  ansible.builtin.include_vars: section6_auditd_rules.yml
+  tags: always
+
+# ============================================================================
+# 6.1 System Integrity Checking (AIDE)
+# ============================================================================
+- name: 6.1.1 - Asegurar que AIDE este instalado
+  ansible.builtin.dnf:
+    name: aide
+    state: present
+  when:
+    - rhel9cis_rule_6_1_1 | bool
+    - rhel9cis_level >= 1
+  tags: ["6.1.1", "level1", "server"]
+
+- name: 6.1.1 - Inicializar la base de datos de AIDE si aun no existe
+  ansible.builtin.command: aide --init
+  args:
+    creates: /var/lib/aide/aide.db.new.gz
+  register: rhel9cis_aide_init
+  when:
+    - rhel9cis_rule_6_1_1 | bool
+    - rhel9cis_level >= 1
+    - not rhel9cis_is_container | bool
+  tags: ["6.1.1", "level1", "server"]
+
+- name: 6.1.1 - Activar la base de datos de AIDE recien inicializada
+  ansible.builtin.copy:
+    src: /var/lib/aide/aide.db.new.gz
+    dest: /var/lib/aide/aide.db.gz
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0600"
+  when:
+    - rhel9cis_rule_6_1_1 | bool
+    - rhel9cis_level >= 1
+    - not rhel9cis_is_container | bool
+    - rhel9cis_aide_init is defined
+    - rhel9cis_aide_init is changed
+  tags: ["6.1.1", "level1", "server"]
+
+- name: 6.1.2 - Programar verificacion periodica de integridad de archivos (AIDE via cron)
+  ansible.builtin.copy:
+    dest: /etc/cron.d/cis-aide-check
+    content: |
+      # {{ ansible_managed }}
+      # CIS 6.1.2 - Verificacion diaria de integridad de archivos con AIDE
+      05 05 * * * root /usr/sbin/aide --check
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  when:
+    - rhel9cis_rule_6_1_2 | bool
+    - rhel9cis_level >= 1
+  tags: ["6.1.2", "level1", "server"]
+
+- name: 6.1.3 - Proteger criptograficamente la integridad de las herramientas de auditoria dentro de AIDE
+  ansible.builtin.blockinfile:
+    path: /etc/aide.conf
+    marker: "# {mark} CIS 6.1.3 - integridad de herramientas de auditoria (ansible managed)"
+    block: |
+      /usr/sbin/auditctl p+i+n+u+g+s+b+acl+xattrs+sha512
+      /usr/sbin/auditd p+i+n+u+g+s+b+acl+xattrs+sha512
+      /usr/sbin/ausearch p+i+n+u+g+s+b+acl+xattrs+sha512
+      /usr/sbin/aureport p+i+n+u+g+s+b+acl+xattrs+sha512
+      /usr/sbin/autrace p+i+n+u+g+s+b+acl+xattrs+sha512
+      /usr/sbin/augenrules p+i+n+u+g+s+b+acl+xattrs+sha512
+    owner: root
+    group: root
+    mode: "0600"
+    backup: true
+  when:
+    - rhel9cis_rule_6_1_3 | bool
+    - rhel9cis_level >= 1
+  tags: ["6.1.3", "level1", "server"]
+
+# ============================================================================
+# 6.2.1 systemd-journald
+# ============================================================================
+- name: 6.2.1.1 - Asegurar que systemd-journald este activo
+  ansible.builtin.systemd:
+    name: systemd-journald.service
+    state: started
+  when:
+    - rhel9cis_rule_6_2_1_1 | bool
+    - rhel9cis_level >= 1
+  tags: ["6.2.1.1", "level1", "server"]
+
+- name: 6.2.1.4 - Asegurar que solo se use un unico sistema de logging (rsyslog); desinstalar syslog-ng si existe
+  ansible.builtin.dnf:
+    name: syslog-ng
+    state: absent
+  when:
+    - rhel9cis_rule_6_2_1_4 | bool
+    - rhel9cis_level >= 1
+  tags: ["6.2.1.4", "level1", "server"]
+
+# ============================================================================
+# 6.2.2 journald remote logging
+# ============================================================================
+- name: 6.2.2.1.1 - Asegurar que systemd-journal-remote este instalado
+  ansible.builtin.dnf:
+    name: systemd-journal-remote
+    state: present
+  when:
+    - rhel9cis_rule_6_2_2_1_1 | bool
+    - rhel9cis_level >= 1
+  tags: ["6.2.2.1.1", "level1", "server"]
+
+- name: 6.2.2.1.3 - Configurar destino de systemd-journal-upload (solo si hay log host remoto definido)
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/journal-upload.conf
+    regexp: '^\s*URL='
+    line: "URL={{ rhel9cis_remote_log_host }}"
+    insertafter: '^\[Upload\]'
+    backup: true
+  when:
+    - rhel9cis_rule_6_2_2_1_3 | bool
+    - rhel9cis_level >= 1
+    - rhel9cis_remote_log_host | length > 0
+  notify: "restart systemd-journal-upload"
+  tags: ["6.2.2.1.3", "level1", "server"]
+
+- name: 6.2.2.1.3 - Habilitar systemd-journal-upload (solo si hay log host remoto definido)
+  ansible.builtin.systemd:
+    name: systemd-journal-upload.service
+    state: started
+    enabled: true
+  when:
+    - rhel9cis_rule_6_2_2_1_3 | bool
+    - rhel9cis_level >= 1
+    - rhel9cis_remote_log_host | length > 0
+  tags: ["6.2.2.1.3", "level1", "server"]
+
+- name: 6.2.2.1.4 - Asegurar que systemd-journal-remote (lado receptor) no este en uso
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+    masked: true
+  loop:
+    - systemd-journal-remote.socket
+    - systemd-journal-remote.service
+  loop_control:
+    label: "{{ item }}"
+  failed_when: false
+  when:
+    - rhel9cis_rule_6_2_2_1_4 | bool
+    - rhel9cis_level >= 1
+  tags: ["6.2.2.1.4", "level1", "server"]
+
+- name: 6.2.2.2/6.2.2.3/6.2.2.4 - Configurar journald.conf (ForwardToSyslog, Compress, Storage)
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/journald.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    insertafter: '^\[Journal\]'
+    backup: true
+  loop:
+    - { id: "6.2.2.2", regexp: '^\s*#?\s*ForwardToSyslog\s*=', line: "ForwardToSyslog=no" }
+    - { id: "6.2.2.3", regexp: '^\s*#?\s*Compress\s*=', line: "Compress=yes" }
+    - { id: "6.2.2.4", regexp: '^\s*#?\s*Storage\s*=', line: "Storage=persistent" }
+  loop_control:
+    label: "{{ item.id }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= 1
+  notify: "restart systemd-journald"
+  tags: ["6.2.2.2", "6.2.2.3", "6.2.2.4", "level1", "server"]
+
+# ============================================================================
+# 6.2.3 rsyslog
+# ============================================================================
+- name: 6.2.3.1 - Asegurar que rsyslog este instalado
+  ansible.builtin.dnf:
+    name: rsyslog
+    state: present
+  when:
+    - rhel9cis_rule_6_2_3_1 | bool
+    - rhel9cis_level >= 1
+  tags: ["6.2.3.1", "level1", "server"]
+
+- name: 6.2.3.2 - Asegurar que el servicio rsyslog este habilitado y activo
+  ansible.builtin.systemd:
+    name: rsyslog
+    state: started
+    enabled: true
+  when:
+    - rhel9cis_rule_6_2_3_2 | bool
+    - rhel9cis_level >= 1
+  tags: ["6.2.3.2", "level1", "server"]
+
+- name: 6.2.3.3 - Asegurar que journald este configurado para enviar logs a rsyslog (modulo imjournal)
+  ansible.builtin.copy:
+    dest: /etc/rsyslog.d/60-cis-imjournal.conf
+    content: |
+      # {{ ansible_managed }}
+      # CIS 6.2.3.3 - reenvio de journald a rsyslog
+      module(load="imjournal" StateFile="imjournal.state")
+    owner: root
+    group: root
+    mode: "0640"
+    backup: true
+  notify: "restart rsyslog"
+  when:
+    - rhel9cis_rule_6_2_3_3 | bool
+    - rhel9cis_level >= 1
+  tags: ["6.2.3.3", "level1", "server"]
+
+- name: 6.2.3.4 - Configurar modo de creacion de archivos de log de rsyslog
+  ansible.builtin.lineinfile:
+    path: /etc/rsyslog.conf
+    regexp: '^\s*\$FileCreateMode\s+'
+    line: "$FileCreateMode 0640"
+    insertafter: '^#### GLOBAL DIRECTIVES ####|^\$ModLoad imuxsock'
+    backup: true
+  notify: "restart rsyslog"
+  when:
+    - rhel9cis_rule_6_2_3_4 | bool
+    - rhel9cis_level >= 1
+  tags: ["6.2.3.4", "level1", "server"]
+
+- name: 6.2.3.7 - Auditar que rsyslog no este configurado para recibir logs de un cliente remoto
+  ansible.builtin.command: grep -Prns -- '^(module\(load="imtcp"|module\(load="imudp"|\$ModLoad\s+(imtcp|imudp))' /etc/rsyslog.conf /etc/rsyslog.d/
+  register: rhel9cis_rsyslog_remote_intake
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - rhel9cis_rule_6_2_3_7 | bool
+    - rhel9cis_level >= 1
+  tags: ["6.2.3.7", "level1", "server"]
+
+- name: 6.2.3.7 - Fallar si rsyslog esta configurado para recibir conexiones remotas
+  ansible.builtin.assert:
+    that:
+      - rhel9cis_rsyslog_remote_intake.stdout_lines | default([]) | length == 0
+    fail_msg: >-
+      [6.2.3.7] rsyslog tiene modulos imtcp/imudp cargados (recepcion remota):
+      {{ rhel9cis_rsyslog_remote_intake.stdout_lines }}. Revisar y eliminar si este host
+      no debe actuar como servidor central de logs.
+    quiet: true
+  ignore_errors: true
+  when:
+    - rhel9cis_rule_6_2_3_7 | bool
+    - rhel9cis_level >= 1
+  tags: ["6.2.3.7", "level1", "server"]
+
+- name: 6.2.4.1 - Fijar permisos restrictivos en todos los archivos de log existentes bajo /var/log
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail &&
+      find /var/log -type f \( -perm -o+wx -o -perm -g+w \) -exec chmod g-w,o-rwx {} \; -print
+    executable: /bin/bash
+  register: rhel9cis_logfile_perms_fix
+  changed_when: rhel9cis_logfile_perms_fix.stdout_lines | length > 0
+  failed_when: false
+  when:
+    - rhel9cis_rule_6_2_4_1 | bool
+    - rhel9cis_level >= 1
+  tags: ["6.2.4.1", "level1", "server"]
+
+# ============================================================================
+# 6.3.1 Configure auditd Service
+# ============================================================================
+- name: 6.3.1.1 (Nivel 2) - Asegurar que los paquetes de auditd esten instalados
+  ansible.builtin.dnf:
+    name:
+      - audit
+      - audit-libs
+    state: present
+  when:
+    - rhel9cis_rule_6_3_1_1 | bool
+    - rhel9cis_level >= 2
+  tags: ["6.3.1.1", "level2", "server"]
+
+- name: 6.3.1.2 (Nivel 2) - Habilitar auditoria de procesos que inician antes que auditd (audit=1 en GRUB)
+  ansible.builtin.command: grubby --update-kernel ALL --args "audit=1"
+  register: rhel9cis_grub_audit1
+  changed_when: rhel9cis_grub_audit1.rc == 0
+  failed_when: rhel9cis_grub_audit1.rc != 0
+  check_mode: false
+  when:
+    - rhel9cis_rule_6_3_1_2 | bool
+    - rhel9cis_level >= 2
+    - not rhel9cis_is_container | bool
+  notify: "mark reboot required"
+  tags: ["6.3.1.2", "level2", "server"]
+
+- name: 6.3.1.3 (Nivel 2) - Asegurar que audit_backlog_limit sea suficiente (GRUB)
+  ansible.builtin.command: grubby --update-kernel ALL --args "audit_backlog_limit=8192"
+  register: rhel9cis_grub_backlog
+  changed_when: rhel9cis_grub_backlog.rc == 0
+  failed_when: rhel9cis_grub_backlog.rc != 0
+  check_mode: false
+  when:
+    - rhel9cis_rule_6_3_1_3 | bool
+    - rhel9cis_level >= 2
+    - not rhel9cis_is_container | bool
+  notify: "mark reboot required"
+  tags: ["6.3.1.3", "level2", "server"]
+
+- name: 6.3.1.4 (Nivel 2) - Asegurar que el servicio auditd este habilitado y activo
+  ansible.builtin.systemd:
+    name: auditd
+    state: started
+    enabled: true
+  when:
+    - rhel9cis_rule_6_3_1_4 | bool
+    - rhel9cis_level >= 2
+  tags: ["6.3.1.4", "level2", "server"]
+
+# ============================================================================
+# 6.3.2 Configure Data Retention (auditd.conf)
+# ============================================================================
+- name: 6.3.2.x (Nivel 2) - Configurar retencion y comportamiento ante espacio bajo en /etc/audit/auditd.conf
+  ansible.builtin.lineinfile:
+    path: /etc/audit/auditd.conf
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    backup: true
+  loop:
+    - { id: "6.3.2.1", regexp: '^\s*max_log_file\s*=', line: "max_log_file = 32" }
+    - { id: "6.3.2.2", regexp: '^\s*max_log_file_action\s*=', line: "max_log_file_action = keep_logs" }
+    - { id: "6.3.2.3", regexp: '^\s*space_left_action\s*=', line: "space_left_action = email" }
+    - { id: "6.3.2.3", regexp: '^\s*action_mail_acct\s*=', line: "action_mail_acct = root" }
+    - { id: "6.3.2.3", regexp: '^\s*admin_space_left_action\s*=', line: "admin_space_left_action = halt" }
+    - { id: "6.3.2.4", regexp: '^\s*disk_full_action\s*=', line: "disk_full_action = halt" }
+    - { id: "6.3.2.4", regexp: '^\s*disk_error_action\s*=', line: "disk_error_action = halt" }
+  loop_control:
+    label: "{{ item.id }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= 2
+  notify: "restart auditd"
+  tags: ["6.3.2.1", "6.3.2.2", "6.3.2.3", "6.3.2.4", "level2", "server"]
+
+# ============================================================================
+# 6.3.3 Configure auditd Rules (reglas por control, ver vars/section6_auditd_rules.yml)
+# ============================================================================
+- name: 6.3.3.x (Nivel 2) - Desplegar reglas de auditd por control CIS
+  ansible.builtin.copy:
+    dest: "/etc/audit/rules.d/{{ item.file }}"
+    content: "{{ (item.lines | join('\n')) + '\n' }}"
+    owner: root
+    group: root
+    mode: "0600"
+    backup: true
+  vars:
+    # Nombre EXACTO 'uid_min' requerido: las lineas en rhel9cis_audit_rule_files (vars/section6_auditd_rules.yml)
+    # contienen el placeholder literal "{{ uid_min }}" que Ansible resuelve por templating recursivo al
+    # renderizar 'item.lines' contra esta variable de alcance de tarea.
+    uid_min: "{{ rhel9cis_uid_min }}"
+  loop: "{{ rhel9cis_audit_rule_files }}"
+  loop_control:
+    label: "{{ item.id }} {{ item.file }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= item.level
+  notify: "load audit rules"
+  tags: ["6.3.3.1", "6.3.3.2", "6.3.3.3", "6.3.3.4", "6.3.3.5", "6.3.3.6", "6.3.3.7",
+         "6.3.3.8", "6.3.3.9", "6.3.3.10", "6.3.3.11", "6.3.3.12", "6.3.3.13", "6.3.3.14",
+         "6.3.3.15", "6.3.3.16", "6.3.3.17", "6.3.3.18", "6.3.3.19", "6.3.3.20", "level2", "server"]
+
+# 6.3.3.6 - Uso de comandos privilegiados (SUID/SGID). Se genera dinamicamente porque
+# depende de los binarios SUID/SGID realmente presentes en el sistema (varia por host).
+- name: 6.3.3.6 (Nivel 2) - Detectar binarios con bit SUID/SGID para regla de comandos privilegiados
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail &&
+      find / -xdev -type f \( -perm -4000 -o -perm -2000 \) 2>/dev/null
+    executable: /bin/bash
+  register: rhel9cis_suid_sgid_bins
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - rhel9cis_rule_6_3_3_6 | bool
+    - rhel9cis_level >= 2
+    - not rhel9cis_is_container | bool
+  tags: ["6.3.3.6", "level2", "server"]
+
+- name: 6.3.3.6 (Nivel 2) - Desplegar regla de auditoria para uso de comandos privilegiados detectados
+  ansible.builtin.copy:
+    dest: /etc/audit/rules.d/50-privileged.rules
+    content: |
+      {% for bin in rhel9cis_suid_sgid_bins.stdout_lines | default([]) %}
+      -a always,exit -F path={{ bin }} -F perm=x -F auid>={{ rhel9cis_uid_min }} -F auid!=unset -k privileged
+      {% endfor %}
+    owner: root
+    group: root
+    mode: "0600"
+    backup: true
+  notify: "load audit rules"
+  when:
+    - rhel9cis_rule_6_3_3_6 | bool
+    - rhel9cis_level >= 2
+    - not rhel9cis_is_container | bool
+    - rhel9cis_suid_sgid_bins is defined
+    - rhel9cis_suid_sgid_bins.stdout_lines | default([]) | length > 0
+  tags: ["6.3.3.6", "level2", "server"]
+
+# ============================================================================
+# 6.3.4 Configure auditd File Access (permisos/propiedad de logs, config y herramientas)
+# ============================================================================
+- name: 6.3.4.1/6.3.4.2 (Nivel 2) - Fijar modo de directorio y archivos de logs de auditoria
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail &&
+      find /var/log/audit -type d -exec chmod 0750 {} \; -o -type f -exec chmod 0640 {} \;
+    executable: /bin/bash
+  register: rhel9cis_audit_log_perms
+  changed_when: true
+  when:
+    - (rhel9cis_rule_6_3_4_1 | bool) or (rhel9cis_rule_6_3_4_2 | bool)
+    - rhel9cis_level >= 2
+  tags: ["6.3.4.1", "6.3.4.2", "level2", "server"]
+
+- name: 6.3.4.3/6.3.4.4 (Nivel 2) - Fijar propietario y grupo de los archivos de log de auditoria
+  ansible.builtin.file:
+    path: /var/log/audit
+    owner: root
+    group: root
+    recurse: true
+  when:
+    - (rhel9cis_rule_6_3_4_3 | bool) or (rhel9cis_rule_6_3_4_4 | bool)
+    - rhel9cis_level >= 2
+  tags: ["6.3.4.3", "6.3.4.4", "level2", "server"]
+
+- name: 6.3.4.5/6.3.4.6/6.3.4.7 (Nivel 2) - Fijar modo, propietario y grupo de archivos de configuracion de auditoria
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0640"
+  loop:
+    - /etc/audit/auditd.conf
+    - /etc/audit/rules.d
+  loop_control:
+    label: "{{ item }}"
+  when:
+    - (rhel9cis_rule_6_3_4_5 | bool) or (rhel9cis_rule_6_3_4_6 | bool) or (rhel9cis_rule_6_3_4_7 | bool)
+    - rhel9cis_level >= 2
+  tags: ["6.3.4.5", "6.3.4.6", "6.3.4.7", "level2", "server"]
+
+- name: 6.3.4.5/6.3.4.6/6.3.4.7 (Nivel 2) - Aplicar recursivamente a reglas y configuraciones adicionales de auditd
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0640"
+    recurse: true
+  loop:
+    - /etc/audit/rules.d
+    - /etc/audit/plugins.d
+  loop_control:
+    label: "{{ item }}"
+  failed_when: false
+  when:
+    - (rhel9cis_rule_6_3_4_5 | bool) or (rhel9cis_rule_6_3_4_6 | bool) or (rhel9cis_rule_6_3_4_7 | bool)
+    - rhel9cis_level >= 2
+  tags: ["6.3.4.5", "6.3.4.6", "6.3.4.7", "level2", "server"]
+
+- name: 6.3.4.8/6.3.4.9/6.3.4.10 (Nivel 2) - Fijar modo, propietario y grupo de las herramientas de auditoria
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /usr/sbin/auditctl
+    - /usr/sbin/auditd
+    - /usr/sbin/ausearch
+    - /usr/sbin/aureport
+    - /usr/sbin/autrace
+    - /usr/sbin/augenrules
+  loop_control:
+    label: "{{ item }}"
+  when:
+    - (rhel9cis_rule_6_3_4_8 | bool) or (rhel9cis_rule_6_3_4_9 | bool) or (rhel9cis_rule_6_3_4_10 | bool)
+    - rhel9cis_level >= 2
+  tags: ["6.3.4.8", "6.3.4.9", "6.3.4.10", "level2", "server"]
+
+# 6.3.3.20 - Debe aplicarse SIEMPRE al final (inmutabilidad, -e 2 requiere reinicio para recargar).
+# La entrada correspondiente en rhel9cis_audit_rule_files (99-finalize.rules) ya se ordena
+# alfabeticamente ultima por convencion de auditd (carga de /etc/audit/rules.d/*.rules en orden).

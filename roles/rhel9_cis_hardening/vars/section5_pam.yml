@@ -1,0 +1,28 @@
+---
+# 5.3.3.2 - /etc/security/pwquality.conf.d/90-cis.conf (settings con valor)
+rhel9cis_pwquality_settings:
+  - { id: "5.3.3.2.1", key: difok, value: "2", level: 1 }
+  - { id: "5.3.3.2.2", key: minlen, value: "14", level: 1 }
+  - { id: "5.3.3.2.4", key: maxrepeat, value: "3", level: 1 }
+  - { id: "5.3.3.2.5", key: maxsequence, value: "3", level: 1 }
+  - { id: "5.3.3.2.6", key: dictcheck, value: "1", level: 1 }
+
+# 5.3.3.2.7 - flags sin valor (presencia de la linea activa la opcion)
+rhel9cis_pwquality_flags:
+  - { id: "5.3.3.2.7", key: enforce_for_root, level: 1 }
+
+# 5.3.3.1 - /etc/security/faillock.conf
+rhel9cis_faillock_settings:
+  - { id: "5.3.3.1.1", key: deny, value: "5", level: 1 }
+  - { id: "5.3.3.1.2", key: unlock_time, value: "900", level: 1 }
+rhel9cis_faillock_flags:
+  - { id: "5.3.3.1.3", key: even_deny_root, level: 2 }
+
+# 5.3.3.3 - /etc/security/pwhistory.conf
+rhel9cis_pwhistory_settings:
+  - { id: "5.3.3.3.1", key: remember, value: "24", level: 1 }
+rhel9cis_pwhistory_flags:
+  - { id: "5.3.3.3.2", key: enforce_for_root, level: 1 }
+
+# 5.3.3.4 - opciones del modulo pam_unix.so dentro del perfil authselect custom
+# (nullok, remember y use_authtok se ELIMINAN si existen; sha512 se ASEGURA presente)

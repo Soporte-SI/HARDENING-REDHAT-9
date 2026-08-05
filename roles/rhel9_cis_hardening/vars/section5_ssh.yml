@@ -1,0 +1,26 @@
+---
+# 5.1 - sshd_config: directivas a fijar a un valor concreto ("present")
+rhel9cis_sshd_settings_present:
+  - { id: "5.1.9", key: ClientAliveInterval, value: "15", level: 1 }
+  - { id: "5.1.9", key: ClientAliveCountMax, value: "3", level: 1 }
+  - { id: "5.1.10", key: DisableForwarding, value: "yes", level: 2 }
+  - { id: "5.1.11", key: GSSAPIAuthentication, value: "no", level: 2 }
+  - { id: "5.1.12", key: HostbasedAuthentication, value: "no", level: 1 }
+  - { id: "5.1.13", key: IgnoreRhosts, value: "yes", level: 1 }
+  - { id: "5.1.14", key: LoginGraceTime, value: "60", level: 1 }
+  - { id: "5.1.15", key: LogLevel, value: "VERBOSE", level: 1 }
+  - { id: "5.1.16", key: MaxAuthTries, value: "4", level: 1 }
+  - { id: "5.1.17", key: MaxStartups, value: "10:30:60", level: 1 }
+  - { id: "5.1.18", key: MaxSessions, value: "10", level: 1 }
+  - { id: "5.1.19", key: PermitEmptyPasswords, value: "no", level: 1 }
+  - { id: "5.1.20", key: PermitRootLogin, value: "no", level: 1 }
+  - { id: "5.1.21", key: PermitUserEnvironment, value: "no", level: 1 }
+  - { id: "5.1.22", key: UsePAM, value: "yes", level: 1 }
+  - { id: "5.1.8", key: Banner, value: "/etc/issue.net", level: 1 }
+
+# 5.1.4/5.1.5/5.1.6 - Se recomienda NO fijar Ciphers/KexAlgorithms/MACs en sshd_config y
+# heredar la politica criptografica del sistema (system-wide-crypto-policy, seccion 1.6).
+rhel9cis_sshd_settings_absent:
+  - { id: "5.1.4", key: Ciphers, level: 1 }
+  - { id: "5.1.5", key: KexAlgorithms, level: 1 }
+  - { id: "5.1.6", key: MACs, level: 1 }

@@ -1,0 +1,151 @@
+---
+# 6.3.3 - Reglas de auditd. Cada control CIS se materializa en su propio archivo
+# /etc/audit/rules.d/50-<key>.rules (una tarea con loop, trazable por control id).
+# {{ uid_min }} se resuelve en tiempo de ejecucion (ver tasks/section6_logging_auditing.yml)
+# a partir de UID_MIN en /etc/login.defs.
+rhel9cis_audit_rule_files:
+  - id: "6.3.3.1"
+    level: 2
+    file: 50-scope.rules
+    lines:
+      - "-w /etc/sudoers -p wa -k scope"
+      - "-w /etc/sudoers.d -p wa -k scope"
+
+  - id: "6.3.3.2"
+    level: 2
+    file: 50-actions.rules
+    lines:
+      - "-a always,exit -F arch=b64 -C euid!=uid -F auid!=unset -S execve -k user_emulation"
+      - "-a always,exit -F arch=b32 -C euid!=uid -F auid!=unset -S execve -k user_emulation"
+
+  - id: "6.3.3.3"
+    level: 2
+    file: 50-sudo_log.rules
+    lines:
+      - "-w /var/log/sudo.log -p wa -k sudo_log_file"
+
+  - id: "6.3.3.4"
+    level: 2
+    file: 50-time-change.rules
+    lines:
+      - "-a always,exit -F arch=b64 -S adjtimex,settimeofday -k time-change"
+      - "-a always,exit -F arch=b32 -S adjtimex,settimeofday -k time-change"
+      - "-a always,exit -F arch=b64 -S clock_settime -F a0=0x0 -k time-change"
+      - "-a always,exit -F arch=b32 -S clock_settime -F a0=0x0 -k time-change"
+      - "-w /etc/localtime -p wa -k time-change"
+
+  - id: "6.3.3.5"
+    level: 2
+    file: 50-system_local.rules
+    lines:
+      - "-a always,exit -F arch=b64 -S sethostname,setdomainname -k system-locale"
+      - "-a always,exit -F arch=b32 -S sethostname,setdomainname -k system-locale"
+      - "-w /etc/issue -p wa -k system-locale"
+      - "-w /etc/issue.net -p wa -k system-locale"
+      - "-w /etc/hosts -p wa -k system-locale"
+      - "-w /etc/hostname -p wa -k system-locale"
+      - "-w /etc/sysconfig/network -p wa -k system-locale"
+      - "-w /etc/NetworkManager/ -p wa -k system-locale"
+
+  - id: "6.3.3.7"
+    level: 2
+    file: 50-access.rules
+    lines:
+      - "-a always,exit -F arch=b64 -S creat,open,openat,truncate,ftruncate -F exit=-EACCES -F auid>={{ uid_min }} -F auid!=unset -k access"
+      - "-a always,exit -F arch=b64 -S creat,open,openat,truncate,ftruncate -F exit=-EPERM -F auid>={{ uid_min }} -F auid!=unset -k access"
+      - "-a always,exit -F arch=b32 -S creat,open,openat,truncate,ftruncate -F exit=-EACCES -F auid>={{ uid_min }} -F auid!=unset -k access"
+      - "-a always,exit -F arch=b32 -S creat,open,openat,truncate,ftruncate -F exit=-EPERM -F auid>={{ uid_min }} -F auid!=unset -k access"
+
+  - id: "6.3.3.8"
+    level: 2
+    file: 50-identity.rules
+    lines:
+      - "-w /etc/group -p wa -k identity"
+      - "-w /etc/passwd -p wa -k identity"
+      - "-w /etc/gshadow -p wa -k identity"
+      - "-w /etc/shadow -p wa -k identity"
+      - "-w /etc/security/opasswd -p wa -k identity"
+
+  - id: "6.3.3.9"
+    level: 2
+    file: 50-perm_mod.rules
+    lines:
+      - "-a always,exit -F arch=b64 -S chmod,fchmod,fchmodat -F auid>={{ uid_min }} -F auid!=unset -k perm_mod"
+      - "-a always,exit -F arch=b64 -S chown,fchown,lchown,fchownat -F auid>={{ uid_min }} -F auid!=unset -k perm_mod"
+      - "-a always,exit -F arch=b64 -S setxattr,lsetxattr,fsetxattr,removexattr,lremovexattr,fremovexattr -F auid>={{ uid_min }} -F auid!=unset -k perm_mod"
+      - "-a always,exit -F arch=b32 -S chmod,fchmod,fchmodat -F auid>={{ uid_min }} -F auid!=unset -k perm_mod"
+      - "-a always,exit -F arch=b32 -S chown,fchown,lchown,fchownat -F auid>={{ uid_min }} -F auid!=unset -k perm_mod"
+      - "-a always,exit -F arch=b32 -S setxattr,lsetxattr,fsetxattr,removexattr,lremovexattr,fremovexattr -F auid>={{ uid_min }} -F auid!=unset -k perm_mod"
+
+  - id: "6.3.3.10"
+    level: 2
+    file: 50-mounts.rules
+    lines:
+      - "-a always,exit -F arch=b64 -S mount -F auid>={{ uid_min }} -F auid!=unset -k mounts"
+      - "-a always,exit -F arch=b32 -S mount -F auid>={{ uid_min }} -F auid!=unset -k mounts"
+
+  - id: "6.3.3.11"
+    level: 2
+    file: 50-session.rules
+    lines:
+      - "-w /var/run/utmp -p wa -k session"
+      - "-w /var/log/wtmp -p wa -k session"
+      - "-w /var/log/btmp -p wa -k session"
+
+  - id: "6.3.3.12"
+    level: 2
+    file: 50-login.rules
+    lines:
+      - "-w /var/log/lastlog -p wa -k logins"
+      - "-w /var/run/faillock -p wa -k logins"
+
+  - id: "6.3.3.13"
+    level: 2
+    file: 50-delete.rules
+    lines:
+      - "-a always,exit -F arch=b64 -S unlink,unlinkat,rename,renameat -F auid>={{ uid_min }} -F auid!=unset -k delete"
+      - "-a always,exit -F arch=b32 -S unlink,unlinkat,rename,renameat -F auid>={{ uid_min }} -F auid!=unset -k delete"
+
+  - id: "6.3.3.14"
+    level: 2
+    file: 50-MAC-policy.rules
+    lines:
+      - "-w /etc/selinux -p wa -k MAC-policy"
+      - "-w /usr/share/selinux -p wa -k MAC-policy"
+
+  - id: "6.3.3.15"
+    level: 2
+    file: 50-perm_chng.rules
+    lines:
+      - "-a always,exit -F path=/usr/bin/chcon -F perm=x -F auid>={{ uid_min }} -F auid!=unset -k perm_chng"
+
+  - id: "6.3.3.16"
+    level: 2
+    file: 50-perm_chng.rules
+    lines:
+      - "-a always,exit -F path=/usr/bin/setfacl -F perm=x -F auid>={{ uid_min }} -F auid!=unset -k perm_chng"
+
+  - id: "6.3.3.17"
+    level: 2
+    file: 50-perm_chng.rules
+    lines:
+      - "-a always,exit -F path=/usr/bin/chacl -F perm=x -F auid>={{ uid_min }} -F auid!=unset -k perm_chng"
+
+  - id: "6.3.3.18"
+    level: 2
+    file: 50-usermod.rules
+    lines:
+      - "-a always,exit -F path=/usr/sbin/usermod -F perm=x -F auid>={{ uid_min }} -F auid!=unset -k usermod"
+
+  - id: "6.3.3.19"
+    level: 2
+    file: 50-kernel_modules.rules
+    lines:
+      - "-a always,exit -F arch=b64 -S init_module,finit_module,delete_module,create_module,query_module -F auid>={{ uid_min }} -F auid!=unset -k kernel_modules"
+      - "-a always,exit -F path=/usr/bin/kmod -F perm=x -F auid>={{ uid_min }} -F auid!=unset -k kernel_modules"
+
+  - id: "6.3.3.20"
+    level: 2
+    file: 99-finalize.rules
+    lines:
+      - "-e 2"

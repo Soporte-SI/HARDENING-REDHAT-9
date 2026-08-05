@@ -1,0 +1,30 @@
+# {{ ansible_managed }}
+# CIS RHEL9 - GDM/GNOME hardening settings (Section 1.8)
+[org/gnome/login-screen]
+{% if rhel9cis_rule_1_8_2 | default(false) | bool %}
+banner-message-enable=true
+banner-message-text='{{ rhel9cis_gdm_banner_text }}'
+{% endif %}
+{% if rhel9cis_rule_1_8_3 | default(false) | bool %}
+disable-user-list=true
+{% endif %}
+
+{% if rhel9cis_rule_1_8_4 | default(false) | bool %}
+[org/gnome/desktop/session]
+idle-delay=uint32 900
+
+[org/gnome/desktop/screensaver]
+lock-enabled=true
+lock-delay=uint32 5
+{% endif %}
+
+{% if rhel9cis_rule_1_8_6 | default(false) | bool or rhel9cis_rule_1_8_8 | default(false) | bool %}
+[org/gnome/desktop/media-handling]
+{% if rhel9cis_rule_1_8_6 | default(false) | bool %}
+automount=false
+automount-open=false
+{% endif %}
+{% if rhel9cis_rule_1_8_8 | default(false) | bool %}
+autorun-never=true
+{% endif %}
+{% endif %}

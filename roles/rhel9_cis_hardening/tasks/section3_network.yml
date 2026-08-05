@@ -1,0 +1,190 @@
+---
+# CIS RHEL9 - Section 3: Network + Section 4: Firewall Configuration
+
+- name: Cargar datos de las secciones 3 (network) y 4 (firewall)
+  ansible.builtin.include_vars: "{{ item }}"
+  loop:
+    - section3_network.yml
+    - section4_firewall.yml
+  tags: always
+
+# ============================================================================
+# 3.1 Network devices
+# ============================================================================
+- name: 3.1.2 - Verificar que no existan interfaces inalambricas activas (auditoria)
+  ansible.builtin.assert:
+    that:
+      - (ansible_facts.interfaces | select('match', '^(wl|wlan)') | list | length) == 0
+    fail_msg: >-
+      [3.1.2] Se detectaron interfaces inalambricas activas. Deshabilitar el driver
+      correspondiente (modprobe.d blacklist) o desactivar el hardware si no es requerido.
+    quiet: true
+  ignore_errors: true
+  when:
+    - rhel9cis_rule_3_1_2 | bool
+    - rhel9cis_level >= 1
+  tags: ["3.1.2", "level1", "server"]
+
+- name: 3.1.3 - Detener, deshabilitar y enmascarar el servicio bluetooth
+  ansible.builtin.systemd:
+    name: bluetooth.service
+    state: stopped
+    enabled: false
+    masked: true
+  failed_when: false
+  when:
+    - rhel9cis_rule_3_1_3 | bool
+    - rhel9cis_level >= 1
+  tags: ["3.1.3", "level1", "server"]
+
+# ============================================================================
+# 3.2 Network kernel modules (Nivel 2)
+# ============================================================================
+- name: 3.2.x - Deshabilitar modulos de kernel de protocolos de red no comunes
+  ansible.builtin.copy:
+    dest: "/etc/modprobe.d/cis-{{ item.module }}.conf"
+    content: |
+      install {{ item.module }} /bin/false
+      blacklist {{ item.module }}
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  loop: "{{ rhel9cis_net_kernel_modules }}"
+  loop_control:
+    label: "{{ item.id }} {{ item.module }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= item.level
+  tags: ["3.2.1", "3.2.2", "3.2.3", "3.2.4", "level2", "server"]
+
+- name: 3.2.x - Descargar del kernel los modulos de red deshabilitados si estan cargados
+  community.general.modprobe:
+    name: "{{ item.module }}"
+    state: absent
+  loop: "{{ rhel9cis_net_kernel_modules }}"
+  loop_control:
+    label: "{{ item.id }} {{ item.module }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= item.level
+  failed_when: false
+  tags: ["3.2.1", "3.2.2", "3.2.3", "3.2.4", "level2", "server"]
+
+# ============================================================================
+# 3.3 Network kernel parameters (sysctl)
+# ============================================================================
+- name: 3.3.x - Endurecer parametros de red del kernel (sysctl)
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/60-cis-network_sysctl.conf
+    state: present
+    reload: true
+    ignoreerrors: true
+  loop: "{{ rhel9cis_net_sysctl }}"
+  loop_control:
+    label: "{{ item.id }} {{ item.key }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= item.level
+  tags: ["3.3.1", "3.3.2", "3.3.3", "3.3.4", "3.3.5", "3.3.6", "3.3.7", "3.3.8",
+         "3.3.9", "3.3.10", "3.3.11", "level1", "server"]
+
+# ============================================================================
+# 4.1 Ensure a single firewall utility is in use
+# ============================================================================
+- name: 4.1.1 - Asegurar que el paquete nftables este instalado
+  ansible.builtin.dnf:
+    name: nftables
+    state: present
+  when:
+    - rhel9cis_rule_4_1_1 | bool
+    - rhel9cis_level >= 1
+  tags: ["4.1.1", "level1", "server"]
+
+- name: 4.1.2 - Asegurar que firewalld este instalado cuando es la utilidad seleccionada
+  ansible.builtin.dnf:
+    name: firewalld
+    state: present
+  when:
+    - rhel9cis_rule_4_1_2 | bool
+    - rhel9cis_level >= 1
+    - rhel9cis_firewall_utility == "firewalld"
+  tags: ["4.1.2", "level1", "server"]
+
+- name: 4.1.2 - Enmascarar utilidades de firewall no seleccionadas (iptables/nftables/firewalld)
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+    masked: true
+  loop:
+    - iptables.service
+    - ip6tables.service
+    - "{{ 'nftables.service' if rhel9cis_firewall_utility == 'firewalld' else 'firewalld.service' }}"
+  loop_control:
+    label: "{{ item }}"
+  failed_when: false
+  when:
+    - rhel9cis_rule_4_1_2 | bool
+    - rhel9cis_level >= 1
+  tags: ["4.1.2", "level1", "server"]
+
+- name: 4.1.2 - Asegurar que la utilidad de firewall seleccionada este habilitada y activa
+  ansible.builtin.systemd:
+    name: "{{ rhel9cis_firewall_utility }}"
+    state: started
+    enabled: true
+  when:
+    - rhel9cis_rule_4_1_2 | bool
+    - rhel9cis_level >= 1
+  tags: ["4.1.2", "level1", "server"]
+
+# ============================================================================
+# 4.2 firewalld (solo si rhel9cis_firewall_utility == firewalld)
+# ============================================================================
+- name: 4.2.2 - Configurar trafico de loopback en la zona de confianza de firewalld
+  ansible.posix.firewalld:
+    zone: trusted
+    interface: lo
+    permanent: true
+    immediate: true
+    state: enabled
+  when:
+    - rhel9cis_rule_4_2_2 | bool
+    - rhel9cis_level >= 1
+    - rhel9cis_firewall_utility == "firewalld"
+  tags: ["4.2.2", "level1", "server"]
+
+- name: 4.2.2 - Denegar trafico entrante spoofed de loopback en la zona publica de firewalld
+  ansible.posix.firewalld:
+    zone: public
+    rich_rule: 'rule family="ipv4" source address="127.0.0.0/8" destination not address="127.0.0.0/8" drop'
+    permanent: true
+    immediate: true
+    state: enabled
+  when:
+    - rhel9cis_rule_4_2_2 | bool
+    - rhel9cis_level >= 1
+    - rhel9cis_firewall_utility == "firewalld"
+  tags: ["4.2.2", "level1", "server"]
+
+# ============================================================================
+# 4.3 nftables (solo si rhel9cis_firewall_utility == nftables)
+# ============================================================================
+- name: 4.3.1/4.3.3/4.3.4 - Desplegar tabla/cadenas base, politica default-deny y loopback de nftables
+  ansible.builtin.template:
+    src: nftables-cis.j2
+    dest: /etc/sysconfig/nftables.conf
+    owner: root
+    group: root
+    mode: "0640"
+    backup: true
+    validate: "nft -c -f %s"
+  notify: "reload nftables"
+  when:
+    - rhel9cis_level >= 1
+    - rhel9cis_firewall_utility == "nftables"
+    - (rhel9cis_rule_4_3_1 | bool) or (rhel9cis_rule_4_3_3 | bool) or (rhel9cis_rule_4_3_4 | bool)
+  tags: ["4.3.1", "4.3.3", "4.3.4", "level1", "server"]

@@ -1,0 +1,264 @@
+---
+# CIS RHEL9 - Section 7 del benchmark (System Maintenance): permisos de archivos de sistema
+# y consistencia de cuentas/grupos. Nombrado section6_system_maintenance.yml por convencion
+# interna de layout de 6 archivos tasks/sectionN_*.yml (ver nota de mapeo en tasks/main.yml).
+
+# ============================================================================
+# 7.1 System File Permissions
+# ============================================================================
+- name: 7.1.x - Fijar propietario, grupo y permisos de archivos criticos de cuentas/sistema
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { id: "7.1.1", path: /etc/passwd, owner: root, group: root, mode: "0644" }
+    - { id: "7.1.2", path: /etc/passwd-, owner: root, group: root, mode: "0600" }
+    - { id: "7.1.3", path: /etc/group, owner: root, group: root, mode: "0644" }
+    - { id: "7.1.4", path: /etc/group-, owner: root, group: root, mode: "0600" }
+    - { id: "7.1.5", path: /etc/shadow, owner: root, group: root, mode: "0000" }
+    - { id: "7.1.6", path: /etc/shadow-, owner: root, group: root, mode: "0000" }
+    - { id: "7.1.7", path: /etc/gshadow, owner: root, group: root, mode: "0000" }
+    - { id: "7.1.8", path: /etc/gshadow-, owner: root, group: root, mode: "0000" }
+    - { id: "7.1.9", path: /etc/shells, owner: root, group: root, mode: "0644" }
+    - { id: "7.1.10", path: /etc/security/opasswd, owner: root, group: root, mode: "0600" }
+  loop_control:
+    label: "{{ item.id }} {{ item.path }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= 1
+  failed_when: false
+  tags: ["7.1.1", "7.1.2", "7.1.3", "7.1.4", "7.1.5", "7.1.6", "7.1.7", "7.1.8",
+         "7.1.9", "7.1.10", "level1", "server"]
+
+- name: 7.1.11 - Detectar directorios world-writable sin sticky bit
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail &&
+      df --local -P 2>/dev/null | awk '{if (NR!=1) print $6}' |
+      xargs -I '{}' find '{}' -xdev -type d \( -perm -0002 -a ! -perm -1000 \) 2>/dev/null
+    executable: /bin/bash
+  register: rhel9cis_ww_dirs_no_sticky
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - rhel9cis_rule_7_1_11 | bool
+    - rhel9cis_level >= 1
+  tags: ["7.1.11", "level1", "server"]
+
+- name: 7.1.11 - Aplicar sticky bit a directorios world-writable detectados (no destructivo)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    mode: "a+t"
+  loop: "{{ rhel9cis_ww_dirs_no_sticky.stdout_lines | default([]) }}"
+  loop_control:
+    label: "{{ item }}"
+  when:
+    - rhel9cis_rule_7_1_11 | bool
+    - rhel9cis_level >= 1
+  tags: ["7.1.11", "level1", "server"]
+
+- name: 7.1.11 - Detectar archivos world-writable (solo reporte, no se modifican automaticamente)
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail &&
+      df --local -P 2>/dev/null | awk '{if (NR!=1) print $6}' |
+      xargs -I '{}' find '{}' -xdev -type f -perm -0002 2>/dev/null
+    executable: /bin/bash
+  register: rhel9cis_ww_files
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - rhel9cis_rule_7_1_11 | bool
+    - rhel9cis_level >= 1
+  tags: ["7.1.11", "level1", "server"]
+
+- name: 7.1.11 - Reportar archivos world-writable (requiere revision manual, no se cambian permisos automaticamente)
+  ansible.builtin.debug:
+    msg: "[7.1.11] Archivos world-writable detectados (revisar manualmente): {{ rhel9cis_ww_files.stdout_lines }}"
+  when:
+    - rhel9cis_rule_7_1_11 | bool
+    - rhel9cis_level >= 1
+    - rhel9cis_ww_files.stdout_lines | default([]) | length > 0
+  tags: ["7.1.11", "level1", "server"]
+
+- name: 7.1.12 - Detectar archivos/directorios sin propietario o grupo valido (solo reporte)
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail &&
+      df --local -P 2>/dev/null | awk '{if (NR!=1) print $6}' |
+      xargs -I '{}' find '{}' -xdev \( -nouser -o -nogroup \) 2>/dev/null
+    executable: /bin/bash
+  register: rhel9cis_orphan_files
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - rhel9cis_rule_7_1_12 | bool
+    - rhel9cis_level >= 1
+  tags: ["7.1.12", "level1", "server"]
+
+- name: 7.1.12 - Reportar archivos/directorios sin dueno o grupo (requiere revision manual)
+  ansible.builtin.debug:
+    msg: "[7.1.12] Archivos/directorios sin propietario o grupo valido: {{ rhel9cis_orphan_files.stdout_lines }}"
+  when:
+    - rhel9cis_rule_7_1_12 | bool
+    - rhel9cis_level >= 1
+    - rhel9cis_orphan_files.stdout_lines | default([]) | length > 0
+  tags: ["7.1.12", "level1", "server"]
+
+# ============================================================================
+# 7.2 Local User and Group Settings
+# ============================================================================
+- name: 7.2.1 - Convertir passwords de /etc/passwd a shadow si aplica (pwconv)
+  ansible.builtin.command: pwconv
+  register: rhel9cis_pwconv
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - rhel9cis_rule_7_2_1 | bool
+    - rhel9cis_level >= 1
+  tags: ["7.2.1", "level1", "server"]
+
+- name: 7.2.2 - Auditar campos de password vacios en /etc/shadow
+  ansible.builtin.shell:
+    cmd: "set -o pipefail && awk -F: '($2 == \"\" ){print $1}' /etc/shadow"
+    executable: /bin/bash
+  register: rhel9cis_empty_shadow_pw
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - rhel9cis_rule_7_2_2 | bool
+    - rhel9cis_level >= 1
+  tags: ["7.2.2", "level1", "server"]
+
+- name: 7.2.2 - Fallar si existen cuentas con campo de password vacio en /etc/shadow
+  ansible.builtin.assert:
+    that:
+      - rhel9cis_empty_shadow_pw.stdout_lines | default([]) | length == 0
+    fail_msg: "[7.2.2] Cuentas con password vacio en /etc/shadow: {{ rhel9cis_empty_shadow_pw.stdout_lines }}"
+    quiet: true
+  ignore_errors: true
+  when:
+    - rhel9cis_rule_7_2_2 | bool
+    - rhel9cis_level >= 1
+  tags: ["7.2.2", "level1", "server"]
+
+- name: 7.2.3 - Auditar grupos de /etc/passwd que no existan en /etc/group
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail &&
+      for i in $(cut -s -d: -f4 /etc/passwd | sort -u); do
+        grep -q -P "^.*?:[^:]*:$i:" /etc/group || echo "GID $i referenciado en /etc/passwd sin grupo en /etc/group";
+      done
+    executable: /bin/bash
+  register: rhel9cis_orphan_group_refs
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - rhel9cis_rule_7_2_3 | bool
+    - rhel9cis_level >= 1
+  tags: ["7.2.3", "level1", "server"]
+
+- name: 7.2.3 - Fallar si existen grupos referenciados en /etc/passwd sin definir en /etc/group
+  ansible.builtin.assert:
+    that:
+      - rhel9cis_orphan_group_refs.stdout_lines | default([]) | length == 0
+    fail_msg: "[7.2.3] {{ rhel9cis_orphan_group_refs.stdout_lines }}"
+    quiet: true
+  ignore_errors: true
+  when:
+    - rhel9cis_rule_7_2_3 | bool
+    - rhel9cis_level >= 1
+  tags: ["7.2.3", "level1", "server"]
+
+- name: 7.2.4/7.2.5/7.2.6/7.2.7 - Auditar duplicados de UID, GID, nombre de usuario y nombre de grupo
+  ansible.builtin.shell:
+    cmd: "{{ item.cmd }}"
+    executable: /bin/bash
+  register: rhel9cis_dup_check
+  loop:
+    - { id: "7.2.4", cmd: "set -o pipefail && cut -d: -f3 /etc/passwd | sort | uniq -d" }
+    - { id: "7.2.5", cmd: "set -o pipefail && cut -d: -f3 /etc/group | sort | uniq -d" }
+    - { id: "7.2.6", cmd: "set -o pipefail && cut -d: -f1 /etc/passwd | sort | uniq -d" }
+    - { id: "7.2.7", cmd: "set -o pipefail && cut -d: -f1 /etc/group | sort | uniq -d" }
+  loop_control:
+    label: "{{ item.id }}"
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= 1
+  tags: ["7.2.4", "7.2.5", "7.2.6", "7.2.7", "level1", "server"]
+
+- name: 7.2.4/7.2.5/7.2.6/7.2.7 - Reportar duplicados detectados (requiere revision manual)
+  ansible.builtin.debug:
+    msg: "[{{ item.item.id }}] Duplicados detectados: {{ item.stdout_lines }}"
+  loop: "{{ rhel9cis_dup_check.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.id | default('n/a') }}"
+  when:
+    - item.skipped is not defined
+    - item.stdout_lines | default([]) | length > 0
+  tags: ["7.2.4", "7.2.5", "7.2.6", "7.2.7", "level1", "server"]
+
+- name: 7.2.8 - Obtener cuentas locales interactivas (getent passwd)
+  ansible.builtin.getent:
+    database: passwd
+  when:
+    - (rhel9cis_rule_7_2_8 | bool) or (rhel9cis_rule_7_2_9 | bool)
+    - rhel9cis_level >= 1
+  tags: ["7.2.8", "7.2.9", "level1", "server"]
+
+- name: 7.2.8 - Asegurar que existan los directorios home de usuarios interactivos locales con permisos correctos
+  ansible.builtin.file:
+    path: "{{ item.value[4] }}"
+    state: directory
+    owner: "{{ item.key }}"
+    group: "{{ item.value[2] }}"
+    mode: "0750"
+  loop: "{{ ansible_facts.getent_passwd | default({}) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  vars:
+    rhel9cis_acct_uid: "{{ item.value[1] }}"
+    rhel9cis_acct_shell: "{{ item.value[5] }}"
+  when:
+    - rhel9cis_rule_7_2_8 | bool
+    - rhel9cis_level >= 1
+    - rhel9cis_acct_uid | int >= rhel9cis_uid_min | int
+    - rhel9cis_acct_shell not in ['/usr/sbin/nologin', '/sbin/nologin', '/bin/false', 'nologin']
+    - item.value[4] | length > 0
+  failed_when: false
+  tags: ["7.2.8", "level1", "server"]
+
+- name: 7.2.9 - Corregir permisos de escritura de grupo/otros en dotfiles de usuarios interactivos locales
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail &&
+      find {{ item.value[4] }} -maxdepth 1 -name '.*' -type f
+      \( -perm -0020 -o -perm -0002 \) -exec chmod go-w {} \; -print
+    executable: /bin/bash
+  register: rhel9cis_dotfile_fix
+  loop: "{{ ansible_facts.getent_passwd | default({}) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  vars:
+    rhel9cis_acct_uid: "{{ item.value[1] }}"
+    rhel9cis_acct_shell: "{{ item.value[5] }}"
+  changed_when: rhel9cis_dotfile_fix.stdout_lines | default([]) | length > 0
+  failed_when: false
+  when:
+    - rhel9cis_rule_7_2_9 | bool
+    - rhel9cis_level >= 1
+    - rhel9cis_acct_uid | int >= rhel9cis_uid_min | int
+    - rhel9cis_acct_shell not in ['/usr/sbin/nologin', '/sbin/nologin', '/bin/false', 'nologin']
+    - item.value[4] | length > 0
+  tags: ["7.2.9", "level1", "server"]

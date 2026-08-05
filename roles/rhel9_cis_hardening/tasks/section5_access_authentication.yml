@@ -1,0 +1,744 @@
+---
+# CIS RHEL9 - Section 5: Access, Authentication and Authorization
+
+- name: Cargar datos de la seccion 5 (accounts, pam, ssh)
+  ansible.builtin.include_vars: "{{ item }}"
+  loop:
+    - section5_accounts.yml
+    - section5_pam.yml
+    - section5_ssh.yml
+  tags: always
+
+# ============================================================================
+# 5.1 Configure SSH server
+# ============================================================================
+- name: 5.1.1 - Fijar permisos de /etc/ssh/sshd_config
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: "0600"
+  when:
+    - rhel9cis_rule_5_1_1 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.1.1", "level1", "server"]
+
+- name: 5.1.1 - Fijar permisos de fragmentos incluidos en /etc/ssh/sshd_config.d/*.conf
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0600"
+  with_fileglob:
+    - /etc/ssh/sshd_config.d/*.conf
+  when:
+    - rhel9cis_rule_5_1_1 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.1.1", "level1", "server"]
+
+- name: 5.1.2 - Fijar permisos de las claves privadas del host SSH
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0600"
+  with_fileglob:
+    - /etc/ssh/ssh_host_*_key
+  when:
+    - rhel9cis_rule_5_1_2 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.1.2", "level1", "server"]
+
+- name: 5.1.3 - Fijar permisos de las claves publicas del host SSH
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  with_fileglob:
+    - /etc/ssh/ssh_host_*_key.pub
+  when:
+    - rhel9cis_rule_5_1_3 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.1.3", "level1", "server"]
+
+- name: 5.1.4/5.1.5/5.1.6 - Eliminar directivas Ciphers/KexAlgorithms/MACs de sshd_config (heredar politica criptografica del sistema)
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^\\s*{{ item.key }}\\s+.*$"
+    state: absent
+    backup: true
+  loop: "{{ rhel9cis_sshd_settings_absent }}"
+  loop_control:
+    label: "{{ item.id }} {{ item.key }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= item.level
+  notify: "restart sshd"
+  tags: ["5.1.4", "5.1.5", "5.1.6", "level1", "server"]
+
+- name: 5.1.7 - Configurar control de acceso de sshd (AllowGroups)
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^\s*AllowGroups\s+.*$'
+    line: "AllowGroups {{ rhel9cis_sshd_allow_groups | join(' ') }}"
+    insertbefore: '^Match|^$'
+    backup: true
+  when:
+    - rhel9cis_rule_5_1_7 | bool
+    - rhel9cis_level >= 1
+    - rhel9cis_sshd_allow_groups | length > 0
+  notify: "restart sshd"
+  tags: ["5.1.7", "level1", "server"]
+
+- name: 5.1.7 - Configurar control de acceso de sshd (AllowUsers)
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^\s*AllowUsers\s+.*$'
+    line: "AllowUsers {{ rhel9cis_sshd_allow_users | join(' ') }}"
+    backup: true
+  when:
+    - rhel9cis_rule_5_1_7 | bool
+    - rhel9cis_level >= 1
+    - rhel9cis_sshd_allow_groups | length == 0
+    - rhel9cis_sshd_allow_users | length > 0
+  notify: "restart sshd"
+  tags: ["5.1.7", "level1", "server"]
+
+- name: 5.1.7 - Configurar control de acceso de sshd (DenyGroups)
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^\s*DenyGroups\s+.*$'
+    line: "DenyGroups {{ rhel9cis_sshd_deny_groups | join(' ') }}"
+    backup: true
+  when:
+    - rhel9cis_rule_5_1_7 | bool
+    - rhel9cis_level >= 1
+    - rhel9cis_sshd_deny_groups | length > 0
+  notify: "restart sshd"
+  tags: ["5.1.7", "level1", "server"]
+
+- name: 5.1.7 - Configurar control de acceso de sshd (DenyUsers)
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^\s*DenyUsers\s+.*$'
+    line: "DenyUsers {{ rhel9cis_sshd_deny_users | join(' ') }}"
+    backup: true
+  when:
+    - rhel9cis_rule_5_1_7 | bool
+    - rhel9cis_level >= 1
+    - rhel9cis_sshd_deny_users | length > 0
+  notify: "restart sshd"
+  tags: ["5.1.7", "level1", "server"]
+
+- name: 5.1.x - Fijar directivas sshd_config con valor concreto
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^\\s*{{ item.key }}\\s+.*$"
+    line: "{{ item.key }} {{ item.value }}"
+    backup: true
+  loop: "{{ rhel9cis_sshd_settings_present }}"
+  loop_control:
+    label: "{{ item.id }} {{ item.key }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= item.level
+  notify: "restart sshd"
+  tags: ["5.1.8", "5.1.9", "5.1.10", "5.1.11", "5.1.12", "5.1.13", "5.1.14", "5.1.15",
+         "5.1.16", "5.1.17", "5.1.18", "5.1.19", "5.1.20", "5.1.21", "5.1.22", "level1", "level2", "server"]
+
+- name: 5.1.x - Validar sintaxis de sshd_config antes de aplicar el reinicio
+  ansible.builtin.command: sshd -t
+  register: rhel9cis_sshd_config_check
+  changed_when: false
+  failed_when: rhel9cis_sshd_config_check.rc != 0
+  check_mode: false
+  when:
+    - rhel9cis_level >= 1
+  tags: ["5.1", "level1", "server"]
+
+# ============================================================================
+# 5.2 Privilege escalation (sudo/su)
+# ============================================================================
+- name: 5.2.1 - Asegurar que sudo este instalado
+  ansible.builtin.dnf:
+    name: sudo
+    state: present
+  when:
+    - rhel9cis_rule_5_2_1 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.2.1", "level1", "server"]
+
+- name: 5.2.x - Asegurar directivas de sudo en /etc/sudoers.d/99-cis-hardening
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/99-cis-hardening
+    line: "{{ item.line }}"
+    regexp: "^{{ item.line.split(' ')[0] | regex_escape }}.*$"
+    create: true
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "/usr/sbin/visudo -cf %s"
+  loop: "{{ rhel9cis_sudoers_lines }}"
+  loop_control:
+    label: "{{ item.id }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= item.level
+  tags: ["5.2.2", "5.2.3", "5.2.6", "level1", "server"]
+
+- name: 5.2.4 - Auditar uso de NOPASSWD en configuracion de sudo
+  ansible.builtin.command: grep -Prns -- '^[^#].*NOPASSWD' /etc/sudoers /etc/sudoers.d/
+  register: rhel9cis_sudo_nopasswd
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - rhel9cis_rule_5_2_4 | bool
+    - rhel9cis_level >= 2
+  tags: ["5.2.4", "level2", "server"]
+
+- name: 5.2.4 - Reportar hallazgos de NOPASSWD (revision manual requerida)
+  ansible.builtin.debug:
+    msg: >-
+      [5.2.4] Se encontraron entradas NOPASSWD en sudoers, revisar si son necesarias
+      (p.ej. cuentas de automatizacion) o deben eliminarse: {{ rhel9cis_sudo_nopasswd.stdout_lines }}
+  when:
+    - rhel9cis_rule_5_2_4 | bool
+    - rhel9cis_level >= 2
+    - rhel9cis_sudo_nopasswd.stdout_lines | default([]) | length > 0
+  tags: ["5.2.4", "level2", "server"]
+
+- name: 5.2.5 - Auditar uso de !authenticate en configuracion de sudo
+  ansible.builtin.command: grep -Prns -- '^[^#].*!authenticate' /etc/sudoers /etc/sudoers.d/
+  register: rhel9cis_sudo_noauth
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - rhel9cis_rule_5_2_5 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.2.5", "level1", "server"]
+
+- name: 5.2.5 - Reportar hallazgos de !authenticate (revision manual requerida)
+  ansible.builtin.debug:
+    msg: >-
+      [5.2.5] Se encontraron entradas !authenticate en sudoers, revisar y corregir
+      manualmente si no estan justificadas: {{ rhel9cis_sudo_noauth.stdout_lines }}
+  when:
+    - rhel9cis_rule_5_2_5 | bool
+    - rhel9cis_level >= 1
+    - rhel9cis_sudo_noauth.stdout_lines | default([]) | length > 0
+  tags: ["5.2.5", "level1", "server"]
+
+- name: 5.2.7 - Asegurar que exista el grupo autorizado a usar su
+  ansible.builtin.group:
+    name: "{{ rhel9cis_su_group }}"
+    state: present
+  when:
+    - rhel9cis_rule_5_2_7 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.2.7", "level1", "server"]
+
+- name: 5.2.7 - Restringir el uso del comando su al grupo autorizado (pam_wheel)
+  community.general.pamd:
+    path: /etc/pam.d
+    name: su
+    type: auth
+    control: required
+    module_path: pam_wheel.so
+    new_type: auth
+    new_control: required
+    new_module_path: pam_wheel.so
+    module_arguments: "use_uid group={{ rhel9cis_su_group }}"
+    state: args_present
+  when:
+    - rhel9cis_rule_5_2_7 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.2.7", "level1", "server"]
+
+# ============================================================================
+# 5.3 Pluggable Authentication Modules
+# ============================================================================
+- name: 5.3.1.x - Asegurar que pam, authselect y libpwquality esten en su ultima version
+  ansible.builtin.dnf:
+    name:
+      - pam
+      - authselect
+      - libpwquality
+    state: latest
+    update_cache: true
+  when:
+    - (rhel9cis_rule_5_3_1_1 | bool) or (rhel9cis_rule_5_3_1_2 | bool) or (rhel9cis_rule_5_3_1_3 | bool)
+    - rhel9cis_level >= 1
+  tags: ["5.3.1.1", "5.3.1.2", "5.3.1.3", "level1", "server"]
+
+- name: 5.3.2.x - Detectar el perfil authselect actualmente activo
+  ansible.builtin.command: authselect current --raw
+  register: rhel9cis_authselect_current
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - rhel9cis_level >= 1
+    - (rhel9cis_rule_5_3_2_1 | bool) or (rhel9cis_rule_5_3_2_2 | bool) or (rhel9cis_rule_5_3_2_3 | bool) or (rhel9cis_rule_5_3_2_4 | bool)
+  tags: ["5.3.2.1", "5.3.2.2", "5.3.2.3", "5.3.2.4", "level1", "server"]
+
+- name: 5.3.2.x - Habilitar features with-faillock/with-pwquality/with-pwhistory en el perfil authselect activo
+  ansible.builtin.command: "authselect enable-feature {{ item.feature }}"
+  register: rhel9cis_authselect_feature
+  changed_when: rhel9cis_authselect_feature.rc == 0
+  failed_when: false
+  loop:
+    - { id: "5.3.2.2", feature: with-faillock }
+    - { id: "5.3.2.3", feature: with-pwquality }
+    - { id: "5.3.2.4", feature: with-pwhistory }
+  loop_control:
+    label: "{{ item.id }} {{ item.feature }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= 1
+    - rhel9cis_authselect_current.rc is defined
+    - rhel9cis_authselect_current.rc == 0
+  notify: "authselect apply-changes"
+  tags: ["5.3.2.2", "5.3.2.3", "5.3.2.4", "level1", "server"]
+
+- name: 5.3.2.1/5.3.2.5 - Verificar que el perfil authselect activo incluya pam_unix (auditoria)
+  ansible.builtin.assert:
+    that:
+      - rhel9cis_authselect_current.rc | default(1) == 0
+    fail_msg: >-
+      [5.3.2.1/5.3.2.5] No se pudo determinar un perfil authselect activo valido.
+      Revisar manualmente con 'authselect current'.
+    quiet: true
+  ignore_errors: true
+  when:
+    - rhel9cis_level >= 1
+    - (rhel9cis_rule_5_3_2_1 | bool) or (rhel9cis_rule_5_3_2_5 | bool)
+  tags: ["5.3.2.1", "5.3.2.5", "level1", "server"]
+
+- name: 5.3.3.2.x - Configurar pwquality.conf.d con valores CIS
+  ansible.builtin.lineinfile:
+    path: /etc/security/pwquality.conf.d/90-cis.conf
+    regexp: "^\\s*{{ item.key }}\\s*="
+    line: "{{ item.key }} = {{ item.value }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  loop: "{{ rhel9cis_pwquality_settings }}"
+  loop_control:
+    label: "{{ item.id }} {{ item.key }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= item.level
+  tags: ["5.3.3.2.1", "5.3.3.2.2", "5.3.3.2.4", "5.3.3.2.5", "5.3.3.2.6", "level1", "server"]
+
+- name: 5.3.3.2.7 - Habilitar flags de pwquality.conf.d sin valor asociado
+  ansible.builtin.lineinfile:
+    path: /etc/security/pwquality.conf.d/90-cis.conf
+    regexp: "^\\s*{{ item.key }}\\s*$"
+    line: "{{ item.key }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  loop: "{{ rhel9cis_pwquality_flags }}"
+  loop_control:
+    label: "{{ item.id }} {{ item.key }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= item.level
+  tags: ["5.3.3.2.7", "level1", "server"]
+
+- name: 5.3.3.1.x - Configurar faillock.conf con valores CIS
+  ansible.builtin.lineinfile:
+    path: /etc/security/faillock.conf
+    regexp: "^\\s*{{ item.key }}\\s*="
+    line: "{{ item.key }} = {{ item.value }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  loop: "{{ rhel9cis_faillock_settings }}"
+  loop_control:
+    label: "{{ item.id }} {{ item.key }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= item.level
+  tags: ["5.3.3.1.1", "5.3.3.1.2", "level1", "server"]
+
+- name: 5.3.3.1.3 (Nivel 2) - Habilitar flags de faillock.conf sin valor asociado (even_deny_root)
+  ansible.builtin.lineinfile:
+    path: /etc/security/faillock.conf
+    regexp: "^\\s*{{ item.key }}\\s*$"
+    line: "{{ item.key }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  loop: "{{ rhel9cis_faillock_flags }}"
+  loop_control:
+    label: "{{ item.id }} {{ item.key }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= item.level
+  tags: ["5.3.3.1.3", "level2", "server"]
+
+- name: 5.3.3.3.1 - Configurar pwhistory.conf con valores CIS
+  ansible.builtin.lineinfile:
+    path: /etc/security/pwhistory.conf
+    regexp: "^\\s*{{ item.key }}\\s*="
+    line: "{{ item.key }} = {{ item.value }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  loop: "{{ rhel9cis_pwhistory_settings }}"
+  loop_control:
+    label: "{{ item.id }} {{ item.key }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= item.level
+  tags: ["5.3.3.3.1", "level1", "server"]
+
+- name: 5.3.3.3.2 - Habilitar flags de pwhistory.conf sin valor asociado (enforce_for_root)
+  ansible.builtin.lineinfile:
+    path: /etc/security/pwhistory.conf
+    regexp: "^\\s*{{ item.key }}\\s*$"
+    line: "{{ item.key }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  loop: "{{ rhel9cis_pwhistory_flags }}"
+  loop_control:
+    label: "{{ item.id }} {{ item.key }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= item.level
+  tags: ["5.3.3.3.2", "level1", "server"]
+
+- name: 5.3.3.3.3/5.3.3.4.x - Asegurar opciones correctas del modulo pam_unix.so (password)
+  community.general.pamd:
+    path: /etc/pam.d
+    name: "{{ item.file }}"
+    type: password
+    control: "{{ item.control }}"
+    module_path: pam_unix.so
+    new_type: password
+    new_control: "{{ item.control }}"
+    new_module_path: pam_unix.so
+    module_arguments: "{{ item.args }}"
+    state: args_present
+  loop:
+    - { file: system-auth, control: sufficient, args: "sha512 use_authtok" }
+    - { file: password-auth, control: sufficient, args: "sha512 use_authtok" }
+  loop_control:
+    label: "{{ item.file }}"
+  when:
+    - rhel9cis_level >= 1
+    - (rhel9cis_rule_5_3_3_3_3 | bool) or (rhel9cis_rule_5_3_3_4_3 | bool) or (rhel9cis_rule_5_3_3_4_4 | bool)
+  failed_when: false
+  tags: ["5.3.3.3.3", "5.3.3.4.3", "5.3.3.4.4", "level1", "server"]
+
+- name: 5.3.3.4.1/5.3.3.4.2 - Eliminar argumentos nullok y remember de pam_unix.so
+  community.general.pamd:
+    path: /etc/pam.d
+    name: "{{ item.file }}"
+    type: password
+    control: sufficient
+    module_path: pam_unix.so
+    module_arguments: "{{ item.arg }}"
+    state: args_absent
+  loop:
+    - { file: system-auth, arg: nullok }
+    - { file: password-auth, arg: nullok }
+    - { file: system-auth, arg: remember }
+    - { file: password-auth, arg: remember }
+  loop_control:
+    label: "{{ item.file }} {{ item.arg }}"
+  when:
+    - rhel9cis_level >= 1
+    - (rhel9cis_rule_5_3_3_4_1 | bool) or (rhel9cis_rule_5_3_3_4_2 | bool)
+  failed_when: false
+  tags: ["5.3.3.4.1", "5.3.3.4.2", "level1", "server"]
+
+# ============================================================================
+# 5.4 User Accounts and Environment
+# ============================================================================
+- name: 5.4.1.x - Configurar directivas de /etc/login.defs
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: "^\\s*{{ item.key }}\\s+.*$"
+    line: "{{ item.key }}\t{{ item.value }}"
+    backup: true
+  loop: "{{ rhel9cis_login_defs_settings }}"
+  loop_control:
+    label: "{{ item.id }} {{ item.key }}"
+  when:
+    - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
+    - rhel9cis_level >= item.level
+  tags: ["5.4.1.1", "5.4.1.3", "5.4.1.4", "5.4.3.3", "level1", "server"]
+
+- name: 5.4.1.5 - Configurar bloqueo por inactividad de password (INACTIVE) por defecto para cuentas nuevas
+  ansible.builtin.lineinfile:
+    path: /etc/default/useradd
+    regexp: '^INACTIVE='
+    line: "INACTIVE=30"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  when:
+    - rhel9cis_rule_5_4_1_5 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.4.1.5", "level1", "server"]
+
+- name: 5.4.1.5 - Auditar cuentas interactivas existentes sin bloqueo por inactividad configurado
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      awk -F: -v uidmin="{{ rhel9cis_uid_min }}" '($3>=uidmin) && ($1!="nfsnobody"){print $1}' /etc/passwd
+    executable: /bin/bash
+  register: rhel9cis_interactive_users
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - rhel9cis_rule_5_4_1_5 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.4.1.5", "level1", "server"]
+
+- name: 5.4.1.6 - Auditar que la ultima fecha de cambio de password de cada usuario no este en el futuro
+  ansible.builtin.command: "chage -l {{ item }}"
+  register: rhel9cis_chage_check
+  loop: "{{ rhel9cis_interactive_users.stdout_lines | default([]) }}"
+  loop_control:
+    label: "{{ item }}"
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - rhel9cis_rule_5_4_1_6 | bool
+    - rhel9cis_level >= 1
+    - rhel9cis_interactive_users is defined
+    - rhel9cis_interactive_users.stdout_lines is defined
+  tags: ["5.4.1.6", "level1", "server"]
+
+- name: 5.4.2.1 - Auditar que root sea la unica cuenta con UID 0 (no destructivo)
+  ansible.builtin.shell:
+    cmd: "set -o pipefail && awk -F: '($3 == 0){print $1}' /etc/passwd | grep -v '^root$'"
+    executable: /bin/bash
+  register: rhel9cis_uid0_extra
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - rhel9cis_rule_5_4_2_1 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.4.2.1", "level1", "server"]
+
+- name: 5.4.2.1 - Fallar si existen cuentas adicionales con UID 0
+  ansible.builtin.assert:
+    that:
+      - rhel9cis_uid0_extra.stdout_lines | default([]) | length == 0
+    fail_msg: "[5.4.2.1] Cuentas adicionales con UID 0 detectadas: {{ rhel9cis_uid0_extra.stdout_lines }}"
+    quiet: true
+  ignore_errors: true
+  when:
+    - rhel9cis_rule_5_4_2_1 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.4.2.1", "level1", "server"]
+
+- name: 5.4.2.2 - Auditar que root sea la unica cuenta con GID 0 (no destructivo)
+  ansible.builtin.shell:
+    cmd: "set -o pipefail && awk -F: '($4 == 0){print $1}' /etc/passwd | grep -v '^root$'"
+    executable: /bin/bash
+  register: rhel9cis_gid0_extra
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - rhel9cis_rule_5_4_2_2 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.4.2.2", "level1", "server"]
+
+- name: 5.4.2.2 - Fallar si existen cuentas adicionales con GID 0
+  ansible.builtin.assert:
+    that:
+      - rhel9cis_gid0_extra.stdout_lines | default([]) | length == 0
+    fail_msg: "[5.4.2.2] Cuentas con GID primario 0 distintas de root: {{ rhel9cis_gid0_extra.stdout_lines }}"
+    quiet: true
+  ignore_errors: true
+  when:
+    - rhel9cis_rule_5_4_2_2 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.4.2.2", "level1", "server"]
+
+- name: 5.4.2.3 - Auditar que el grupo root sea el unico grupo con GID 0 (no destructivo)
+  ansible.builtin.shell:
+    cmd: "set -o pipefail && awk -F: '($3 == 0){print $1}' /etc/group | grep -v '^root$'"
+    executable: /bin/bash
+  register: rhel9cis_group_gid0_extra
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - rhel9cis_rule_5_4_2_3 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.4.2.3", "level1", "server"]
+
+- name: 5.4.2.3 - Fallar si existen grupos adicionales con GID 0
+  ansible.builtin.assert:
+    that:
+      - rhel9cis_group_gid0_extra.stdout_lines | default([]) | length == 0
+    fail_msg: "[5.4.2.3] Grupos con GID 0 distintos de root: {{ rhel9cis_group_gid0_extra.stdout_lines }}"
+    quiet: true
+  ignore_errors: true
+  when:
+    - rhel9cis_rule_5_4_2_3 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.4.2.3", "level1", "server"]
+
+- name: 5.4.2.5 - Auditar integridad del PATH de root (no debe contener '.' ni directorios world-writable)
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail &&
+      su - root -c 'echo $PATH' | tr ':' '\n' | grep -E '^\.?$|^$' ; true
+    executable: /bin/bash
+  register: rhel9cis_root_path_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - rhel9cis_rule_5_4_2_5 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.4.2.5", "level1", "server"]
+
+- name: 5.4.2.5 - Fallar si el PATH de root contiene el directorio actual o entradas vacias
+  ansible.builtin.assert:
+    that:
+      - rhel9cis_root_path_check.stdout | default('') | trim == ''
+    fail_msg: "[5.4.2.5] El PATH de root contiene entradas inseguras (directorio actual/vacio). Corregir manualmente."
+    quiet: true
+  ignore_errors: true
+  when:
+    - rhel9cis_rule_5_4_2_5 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.4.2.5", "level1", "server"]
+
+- name: 5.4.2.6 - Verificar existencia de archivos de inicio de root
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /root/.bash_profile
+    - /root/.bashrc
+    - /root/.cshrc
+    - /root/.profile
+  loop_control:
+    label: "{{ item }}"
+  register: rhel9cis_root_dotfiles_stat
+  when:
+    - rhel9cis_rule_5_4_2_6 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.4.2.6", "level1", "server"]
+
+- name: 5.4.2.6 - Forzar umask 027 en archivos de inicio de root existentes
+  ansible.builtin.lineinfile:
+    path: "{{ item.item }}"
+    regexp: '^\s*umask\s+\S+'
+    line: "umask 027"
+    backup: true
+  loop: "{{ rhel9cis_root_dotfiles_stat.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when:
+    - rhel9cis_rule_5_4_2_6 | bool
+    - rhel9cis_level >= 1
+    - item.stat is defined
+    - item.stat.exists
+  tags: ["5.4.2.6", "level1", "server"]
+
+- name: 5.4.2.7/5.4.2.8 - Obtener cuentas de /etc/passwd y /etc/shadow (getent)
+  ansible.builtin.getent:
+    database: "{{ item }}"
+  loop:
+    - passwd
+    - shadow
+  when:
+    - rhel9cis_level >= 1
+    - (rhel9cis_rule_5_4_2_7 | bool) or (rhel9cis_rule_5_4_2_8 | bool)
+  tags: ["5.4.2.7", "5.4.2.8", "level1", "server"]
+
+- name: 5.4.2.7 - Fijar shell nologin en cuentas de sistema sin shell interactivo autorizado
+  ansible.builtin.user:
+    name: "{{ item.key }}"
+    shell: /usr/sbin/nologin
+  loop: "{{ ansible_facts.getent_passwd | default({}) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  vars:
+    rhel9cis_acct_uid: "{{ item.value[1] }}"
+    rhel9cis_acct_shell: "{{ item.value[5] }}"
+  when:
+    - rhel9cis_rule_5_4_2_7 | bool
+    - rhel9cis_level >= 1
+    - rhel9cis_acct_uid | int < rhel9cis_uid_min | int
+    - item.key not in rhel9cis_system_accounts_whitelist
+    - rhel9cis_acct_shell not in ['/usr/sbin/nologin', '/sbin/nologin', '/bin/false']
+  tags: ["5.4.2.7", "level1", "server"]
+
+- name: 5.4.2.8 - Bloquear cuentas de sistema sin shell de login valido que aun no esten bloqueadas
+  ansible.builtin.user:
+    name: "{{ item.key }}"
+    password_lock: true
+  loop: "{{ ansible_facts.getent_passwd | default({}) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  vars:
+    rhel9cis_acct_uid: "{{ item.value[1] }}"
+    rhel9cis_acct_shell: "{{ item.value[5] }}"
+    rhel9cis_acct_shadow_pw: "{{ (ansible_facts.getent_shadow | default({})).get(item.key, ['']) [0] | default('') }}"
+  when:
+    - rhel9cis_rule_5_4_2_8 | bool
+    - rhel9cis_level >= 1
+    - rhel9cis_acct_uid | int < rhel9cis_uid_min | int
+    - item.key not in rhel9cis_system_accounts_whitelist
+    - rhel9cis_acct_shell in ['/usr/sbin/nologin', '/sbin/nologin', '/bin/false', 'nologin']
+    - not (rhel9cis_acct_shadow_pw is match('^!.*'))
+  tags: ["5.4.2.8", "level1", "server"]
+
+- name: 5.4.3.1 (Nivel 2) - Asegurar que nologin no aparezca listado en /etc/shells
+  ansible.builtin.lineinfile:
+    path: /etc/shells
+    regexp: 'nologin'
+    state: absent
+    backup: true
+  when:
+    - rhel9cis_rule_5_4_3_1 | bool
+    - rhel9cis_level >= 2
+  tags: ["5.4.3.1", "level2", "server"]
+
+- name: 5.4.3.2 - Configurar timeout de sesion de shell inactiva (TMOUT)
+  ansible.builtin.copy:
+    dest: /etc/profile.d/60-cis-tmout.sh
+    content: |
+      # {{ ansible_managed }}
+      # CIS 5.4.3.2 - Timeout de sesion de shell inactiva
+      readonly TMOUT=900 ; export TMOUT
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  when:
+    - rhel9cis_rule_5_4_3_2 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.4.3.2", "level1", "server"]

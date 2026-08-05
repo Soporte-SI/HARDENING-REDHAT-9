@@ -1,0 +1,51 @@
+---
+# rhel9_cis_hardening - orquestador de secciones
+# Cada seccion se filtra internamente por rhel9cis_level y por el toggle individual
+# de cada control (rhel9cis_rule_<id>). Ver defaults/main.yml y README.md.
+
+- name: Leer UID_MIN real desde /etc/login.defs (fuente de verdad para reglas de auditd/cuentas de sistema)
+  ansible.builtin.command: awk '/^\s*UID_MIN/{print $2}' /etc/login.defs
+  register: rhel9cis_uid_min_raw
+  changed_when: false
+  check_mode: false
+  tags: always
+
+- name: Fijar rhel9cis_uid_min definitivo
+  ansible.builtin.set_fact:
+    rhel9cis_uid_min: >-
+      {{ rhel9cis_uid_min_override if (rhel9cis_uid_min_override | int) > 0
+         else (rhel9cis_uid_min_raw.stdout | default('1000') | trim) }}
+  tags: always
+
+# NOTA de mapeo de secciones: el CIS RHEL9 Benchmark v2.0.0 tiene 7 secciones de primer
+# nivel (1 Initial Setup, 2 Services, 3 Network, 4 Firewall Configuration, 5 Access/
+# Authentication/Authorization, 6 Logging and Auditing, 7 System Maintenance). Para respetar
+# el layout de archivos solicitado (6 archivos tasks/sectionN_*.yml) se agrupa asi:
+#   section3_network.yml            -> CIS 3 (Network) + CIS 4 (Firewall Configuration)
+#   section4_logging_auditing.yml   -> CIS 6 (Logging, Auditing: AIDE, journald, rsyslog, auditd)
+#   section5_access_authentication.yml -> CIS 5 (Access, Authentication, Authorization)
+#   section6_system_maintenance.yml -> CIS 7 (System Maintenance: permisos, cuentas)
+
+- name: 1 - Initial Setup
+  ansible.builtin.include_tasks: section1_initial_setup.yml
+  tags: ["section1"]
+
+- name: 2 - Services
+  ansible.builtin.include_tasks: section2_services.yml
+  tags: ["section2"]
+
+- name: 3 - Network + 4 Firewall Configuration
+  ansible.builtin.include_tasks: section3_network.yml
+  tags: ["section3", "section4"]
+
+- name: 5 - Access, Authentication and Authorization
+  ansible.builtin.include_tasks: section5_access_authentication.yml
+  tags: ["section5"]
+
+- name: 6 - Logging and Auditing (AIDE, journald, rsyslog, auditd)
+  ansible.builtin.include_tasks: section4_logging_auditing.yml
+  tags: ["section6"]
+
+- name: 7 - System Maintenance (permisos de archivos y cuentas)
+  ansible.builtin.include_tasks: section6_system_maintenance.yml
+  tags: ["section7"]

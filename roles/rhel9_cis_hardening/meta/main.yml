@@ -1,0 +1,23 @@
+---
+galaxy_info:
+  role_name: rhel9_cis_hardening
+  namespace: gms_solidario
+  author: GMS - Practica Red Hat / Ansible
+  description: >-
+    Hardening de RHEL 9 conforme a CIS Red Hat Enterprise Linux 9 Benchmark v2.0.0,
+    Nivel 1 + Nivel 2, perfil Server. Desarrollado a medida para Banco Solidario
+    (sin dependencias de roles community de terceros).
+  license: proprietary
+  min_ansible_version: "2.15"
+  platforms:
+    - name: EL
+      versions:
+        - "9"
+  galaxy_tags:
+    - security
+    - hardening
+    - cis
+    - rhel9
+    - compliance
+
+dependencies: []

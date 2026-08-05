@@ -1,0 +1,22 @@
+---
+# Variables globales de entorno para el grupo "rhel9".
+# Las excepciones puntuales por host van en group_vars/<grupo>.yml o host_vars/<host>.yml,
+# nunca editando roles/rhel9_cis_hardening/defaults/main.yml directamente.
+
+# Nivel CIS a aplicar en este entorno. 1 = Nivel 1 unicamente, 2 = Nivel 1 + Nivel 2.
+rhel9cis_level: 2
+
+# Perfil de benchmark soportado por este rol
+rhel9cis_profile: server
+
+# Ejemplo de excepcion documentada de negocio (descomentar y justificar en el ticket/CR asociado):
+# rhel9cis_rule_1_1_1_8: false   # usb-storage requerido en srv-rhel9-app01 para backup a cinta USB (CR-1234)
+
+# Utilidad de firewall unica a usar: firewalld (por defecto) o nftables
+rhel9cis_firewall_utility: firewalld
+
+# Password del bootloader GRUB2 (1.4.1). Definir vía Ansible Vault en un archivo separado,
+# NUNCA en texto plano en este repositorio. Ejemplo:
+# ansible-vault create group_vars/rhel9/vault.yml
+#   rhel9cis_grub_password: "SuperSecretoDeGrub"
+rhel9cis_grub_password: ""

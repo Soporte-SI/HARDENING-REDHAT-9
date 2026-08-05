@@ -1,0 +1,49 @@
+---
+# Playbook principal - CIS RHEL 9 Benchmark v2.0.0, Nivel 1 + Nivel 2, perfil Server
+# Banco Solidario / GMS - Playbook 1 de 18
+#
+# Uso:
+#   ansible-playbook -i inventory/hosts.ini site.yml --ask-become-pass
+#   ansible-playbook -i inventory/hosts.ini site.yml --check --diff   (modo simulacion)
+#   ansible-playbook -i inventory/hosts.ini site.yml --tags "5.1"     (solo SSH)
+#   ansible-playbook -i inventory/hosts.ini site.yml --skip-tags "6.3" (excluye auditd)
+#
+# Ver README.md para detalle completo de uso, variables y advertencias.
+
+- name: CIS RHEL 9 Hardening - Banco Solidario
+  hosts: rhel9
+  become: true
+  gather_facts: true
+  any_errors_fatal: false
+  max_fail_percentage: 100
+
+  pre_tasks:
+    - name: Verificar que el sistema operativo es RHEL/compatible 9.x
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] in ['RedHat', 'CentOS', 'Rocky', 'AlmaLinux', 'OracleLinux']
+          - ansible_facts['distribution_major_version'] == '9'
+        fail_msg: >-
+          Este playbook esta diseñado y validado unicamente para RHEL 9 (o derivados
+          compatibles: Rocky/Alma/OL 9). Sistema detectado:
+          {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}
+        success_msg: "Sistema operativo compatible detectado, se procede con el hardening."
+      tags: always
+
+    - name: Recolectar inventario de paquetes instalados (usado por multiples controles)
+      ansible.builtin.package_facts:
+        manager: auto
+      tags: always
+
+  roles:
+    - role: rhel9_cis_hardening
+
+  post_tasks:
+    - name: Aviso si alguna tarea marco que se requiere reinicio
+      ansible.builtin.debug:
+        msg: >-
+          Se aplicaron cambios que requieren REINICIO del sistema (GRUB/kernel/auditd
+          en modo inmutable, crypto-policies, etc.) para quedar completamente activos.
+          Coordinar la ventana de mantenimiento correspondiente.
+      when: rhel9cis_reboot_required | default(false) | bool
+      tags: always
