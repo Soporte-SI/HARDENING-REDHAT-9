@@ -608,6 +608,25 @@
     - rhel9cis_level >= 1
   tags: ["5.4.2.3", "level1", "server"]
 
+- name: 5.4.2.4 - Auditar estado de la cuenta root (agregado 2026-08-07, linea base del banco)
+  ansible.builtin.command: passwd -S root
+  register: rhel9cis_root_passwd_status
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - rhel9cis_rule_5_4_2_4 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.4.2.4", "level1", "server"]
+
+- name: 5.4.2.4 - Mostrar estado de la cuenta root (control manual segun CIS y el banco - decision de politica de break-glass)
+  ansible.builtin.debug:
+    msg: "[5.4.2.4] Estado actual de la cuenta root: {{ rhel9cis_root_passwd_status.stdout | default('no disponible') }}. Verificar manualmente que corresponda a la politica de acceso de emergencia (break-glass) del banco."
+  when:
+    - rhel9cis_rule_5_4_2_4 | bool
+    - rhel9cis_level >= 1
+  tags: ["5.4.2.4", "level1", "server"]
+
 - name: 5.4.2.5 - Auditar integridad del PATH de root (no debe contener '.' ni directorios world-writable)
   ansible.builtin.shell:
     cmd: >-
