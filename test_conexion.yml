@@ -2,55 +2,24 @@
 # Playbook: test_linux_connectivity.yml
 # Prueba de conectividad SSH contra hosts Linux (RedHat/AIX) usando
 # ansible.builtin.ping. No aplica ningun cambio (es solo diagnostico).
-# No requiere become, solo login SSH valido.
 #
 # Uso CLI:
 #   ansible-playbook playbooks/test_linux_connectivity.yml \
 #     -i inventories/production/hosts.yml
 #
-# Si usas el inventario combinado del repo (grupos redhat/aix), cambia
-# "hosts: all" por "hosts: redhat:aix" para acotar solo a esos grupos.
-#
 # Ad-hoc equivalente (sin playbook):
 #   ansible all -i inventories/production/hosts.yml -m ansible.builtin.ping
-#
-# En AWX/AAP: usalo como Job Template de "verificacion" (con el
-# inventario RedHat o AIX que corresponda) antes de correr el
-# parchado real, igual que test_winrm_connectivity.yml para Windows.
 
-- name: Prueba de conectividad SSH (ping + info basica del host)
+- name: Prueba de conectividad SSH (ping/pong)
   hosts: all
-  gather_facts: true
-  become: false
-  ignore_unreachable: true
+  gather_facts: false
 
   tasks:
     - name: ping | Probar conectividad SSH
       ansible.builtin.ping:
       register: ssh_ping_result
-      ignore_unreachable: true
-      ignore_errors: true
 
     - name: ping | Mostrar resultado por host
       ansible.builtin.debug:
-        msg: >-
-          {{ inventory_hostname }} ->
-          {{ 'OK' if (ssh_ping_result.ping | default('') == 'pong') else 'FALLO / INALCANZABLE' }}
-
-    - name: info | Mostrar datos basicos del host (si respondio)
-      ansible.builtin.debug:
-        msg:
-          - "Host: {{ inventory_hostname }}"
-          - "OS: {{ ansible_facts['distribution'] | default('N/A') }} {{ ansible_facts['distribution_version'] | default('') }}"
-          - "Kernel/Version: {{ ansible_facts['kernel'] | default('N/A') }}"
-          - "Uptime (seg): {{ ansible_facts['uptime_seconds'] | default('N/A') }}"
-      when: ssh_ping_result.ping | default('') == 'pong'
-
-- name: Resumen de conectividad Linux
-  hosts: localhost
-  gather_facts: false
-  connection: local
-  tasks:
-    - name: Resumen | Hosts Linux probados
-      ansible.builtin.debug:
-        msg: "Prueba de conectividad SSH finalizada. Revisa el detalle por host arriba (OK / FALLO / INALCANZABLE)."
+        msg: "{{ inventory_hostname }} -> {{ ssh_ping_result.ping }}"
+      when: ssh_ping_result.ping is defined
