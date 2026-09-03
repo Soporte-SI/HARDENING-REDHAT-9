@@ -45,65 +45,10 @@
             mode: "0600"
           no_log: true
 
-        # AGREGADO 2026-09-03 (TEMPORAL - quitar una vez resuelto el kinit):
-        # el job 138 volvió a fallar con el MISMO error que teníamos antes de
-        # construir el EE con el subperfil AD-SUPPORT ("kinit: Pre-
-        # authentication failed: Invalid argument while getting initial
-        # credentials"). Eso es sospechoso - si el fix de crypto-policies
-        # hubiera quedado bien aplicado en la imagen que se importó al nodo,
-        # este error debería haber cambiado. Estas dos tareas de diagnóstico
-        # corren ANTES del kinit (a diferencia de él, no pueden fallar el
-        # play) para confirmar, dentro del contenedor real que usa AWX, si
-        # el EE que se está ejecutando realmente tiene el subperfil AD-
-        # SUPPORT activo y el allow_weak_crypto en krb5.conf - o si por algo
-        # (build viejo, imagen no reimportada, tag no actualizado) se está
-        # usando una versión del EE anterior a ese cambio.
-        - name: "Kerberos - DIAGNOSTICO: politica de crypto activa en el EE"
-          ansible.builtin.command: update-crypto-policies --show
-          register: krb5_diag_crypto_policy
-          changed_when: false
-          failed_when: false
-
-        - name: "Kerberos - DIAGNOSTICO: mostrar resultado de la politica de crypto"
-          ansible.builtin.debug:
-            msg: "Politica de crypto activa: {{ krb5_diag_crypto_policy.stdout | default('(sin salida - rc=' + (krb5_diag_crypto_policy.rc | default('?') | string) + ')') }}"
-
-        - name: "Kerberos - DIAGNOSTICO: contenido de /etc/krb5.conf"
-          ansible.builtin.command: cat /etc/krb5.conf
-          register: krb5_diag_conf
-          changed_when: false
-          failed_when: false
-
-        - name: "Kerberos - DIAGNOSTICO: mostrar krb5.conf"
-          ansible.builtin.debug:
-            msg: "{{ krb5_diag_conf.stdout_lines | default(['(sin salida - rc=' + (krb5_diag_conf.rc | default('?') | string) + ')']) }}"
-        # FIN DIAGNOSTICO TEMPORAL
-
         - name: "Kerberos - kinit con el keytab"
           ansible.builtin.command: >
             kinit -kt /tmp/svc_si_ansible.keytab {{ krb5_principal }}
           changed_when: false
-
-        # AGREGADO 2026-09-03 (TEMPORAL - quitar una vez resuelto el SSH):
-        # el kinit ya funciona (confirmado en job anterior), pero el SSH
-        # posterior sigue rechazado con "Permission denied" listando
-        # gssapi-keyex/gssapi-with-mic como métodos que el servidor acepta -
-        # o sea, nunca llega a intentarlos con éxito. "klist" confirma si el
-        # ticket realmente quedó disponible en el cache que va a usar el
-        # cliente SSH (y en qué backend - FILE vs KEYRING importa: si es
-        # KEYRING, el ticket puede no ser visible entre procesos/sesiones
-        # distintos dentro del mismo contenedor, aunque el kinit haya sido
-        # exitoso).
-        - name: "Kerberos - DIAGNOSTICO: klist despues del kinit"
-          ansible.builtin.command: klist -A
-          register: krb5_diag_klist
-          changed_when: false
-          failed_when: false
-
-        - name: "Kerberos - DIAGNOSTICO: mostrar klist"
-          ansible.builtin.debug:
-            msg: "{{ krb5_diag_klist.stdout_lines | default(['(sin salida - rc=' + (krb5_diag_klist.rc | default('?') | string) + ')']) + krb5_diag_klist.stderr_lines | default([]) }}"
-        # FIN DIAGNOSTICO TEMPORAL
 
   tasks:
     - name: ping | Probar conectividad SSH
