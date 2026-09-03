@@ -84,6 +84,27 @@
             kinit -kt /tmp/svc_si_ansible.keytab {{ krb5_principal }}
           changed_when: false
 
+        # AGREGADO 2026-09-03 (TEMPORAL - quitar una vez resuelto el SSH):
+        # el kinit ya funciona (confirmado en job anterior), pero el SSH
+        # posterior sigue rechazado con "Permission denied" listando
+        # gssapi-keyex/gssapi-with-mic como métodos que el servidor acepta -
+        # o sea, nunca llega a intentarlos con éxito. "klist" confirma si el
+        # ticket realmente quedó disponible en el cache que va a usar el
+        # cliente SSH (y en qué backend - FILE vs KEYRING importa: si es
+        # KEYRING, el ticket puede no ser visible entre procesos/sesiones
+        # distintos dentro del mismo contenedor, aunque el kinit haya sido
+        # exitoso).
+        - name: "Kerberos - DIAGNOSTICO: klist despues del kinit"
+          ansible.builtin.command: klist -A
+          register: krb5_diag_klist
+          changed_when: false
+          failed_when: false
+
+        - name: "Kerberos - DIAGNOSTICO: mostrar klist"
+          ansible.builtin.debug:
+            msg: "{{ krb5_diag_klist.stdout_lines | default(['(sin salida - rc=' + (krb5_diag_klist.rc | default('?') | string) + ')']) + krb5_diag_klist.stderr_lines | default([]) }}"
+        # FIN DIAGNOSTICO TEMPORAL
+
   tasks:
     - name: ping | Probar conectividad SSH
       ansible.builtin.ping:
