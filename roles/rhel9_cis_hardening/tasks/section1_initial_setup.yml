@@ -104,14 +104,23 @@
     - rhel9cis_level >= 1
   tags: ["1.2.1.2", "level1", "server"]
 
+- name: 1.2.1.2 - Buscar los .repo que realmente existen en el host remoto
+  ansible.builtin.find:
+    paths: /etc/yum.repos.d
+    patterns: "*.repo"
+  register: rhel9cis_repo_files_encontrados
+  when:
+    - rhel9cis_rule_1_2_1_2 | bool
+    - rhel9cis_level >= 1
+  tags: ["1.2.1.2", "level1", "server"]
+
 - name: 1.2.1.2 - Asegurar gpgcheck=1 en cada repo definido en /etc/yum.repos.d/*.repo
   ansible.builtin.replace:
-    path: "{{ item }}"
+    path: "{{ item.path }}"
     regexp: '^gpgcheck\s*=\s*0\s*$'
     replace: "gpgcheck=1"
     backup: true
-  with_fileglob:
-    - /etc/yum.repos.d/*.repo
+  loop: "{{ rhel9cis_repo_files_encontrados.files | default([]) }}"
   when:
     - rhel9cis_rule_1_2_1_2 | bool
     - rhel9cis_level >= 1
