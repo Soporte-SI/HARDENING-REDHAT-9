@@ -13,11 +13,52 @@
 - name: CIS RHEL 9 Hardening - Banco Solidario
   hosts: rhel9
   become: true
-  gather_facts: true
+  # CORREGIDO 2026-09-04: gather_facts se pasa a false y se hace explicito
+  # dentro de pre_tasks, DESPUES del kinit - con gather_facts:true, Ansible
+  # intenta conectarse por SSH (para el modulo "setup") ANTES de que corra
+  # ningun pre_task, así que el ticket Kerberos nunca llegaba a existir a
+  # tiempo. Esto es lo que causaba "UNREACHABLE... Permission denied
+  # (publickey,gssapi-keyex,gssapi-with-mic,password,keyboard-interactive)"
+  # contra 10.110.9.188 (job 192) - el mismo host que ya funciona a mano
+  # (ver kerberos_ticket_en_awx.md) y con el playbook de diagnostico
+  # test_conexion.yml, que SI tiene gather_facts:false + este mismo bloque.
+  # Este playbook de produccion nunca habia recibido ese fix - solo el de
+  # pruebas.
+  gather_facts: false
   any_errors_fatal: false
   max_fail_percentage: 100
 
   pre_tasks:
+    # AGREGADO 2026-09-04: mismo mecanismo que test_conexion.yml - obtiene
+    # el ticket Kerberos ANTES de que Ansible intente conectarse por SSH a
+    # hosts del dominio BSCLUSTER.INT. Las variables krb5_keytab_path_b64 y
+    # krb5_principal las inyecta la Credential "SSH Kerberos - Keytab" (ya
+    # adjunta a este Job Template en AWX, ver Detalles del job: "Nube: Linux
+    # Kerberos"). Sin este bloque, el EE Kerberos tiene los binarios pero
+    # nunca llega a pedir el ticket - ver
+    # Ansible/execution-environment-krb5/kerberos_ticket_en_awx.md.
+    - name: "Kerberos - Obtener ticket antes de conectar por SSH"
+      delegate_to: localhost
+      become: false
+      when: krb5_keytab_path_b64 is defined
+      block:
+        - name: "Kerberos - Decodificar el keytab"
+          ansible.builtin.copy:
+            content: "{{ krb5_keytab_path_b64 | b64decode }}"
+            dest: "/tmp/svc_si_ansible.keytab"
+            mode: "0600"
+          no_log: true
+
+        - name: "Kerberos - kinit con el keytab"
+          ansible.builtin.command: >
+            kinit -kt /tmp/svc_si_ansible.keytab {{ krb5_principal }}
+          changed_when: false
+      tags: always
+
+    - name: "Recolectar hechos (despues del kinit, no antes)"
+      ansible.builtin.setup:
+      tags: always
+
     - name: Verificar que el sistema operativo es RHEL/compatible 9.x
       ansible.builtin.assert:
         that:
