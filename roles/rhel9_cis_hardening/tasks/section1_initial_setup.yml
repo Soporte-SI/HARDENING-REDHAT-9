@@ -303,6 +303,28 @@
   tags: ["1.5.3", "1.5.4", "level1", "server"]
 
 # --- 1.6 System wide crypto policy ------------------------------------------------------
+# AGREGADO 2026-09-12: NO-WEAKMAC y NO-SSHCBC NO vienen predefinidos en el
+# sistema (a diferencia de NO-SHA1, que si es un modulo ya incluido) - hay
+# que crearlos primero como archivos .pmod antes de poder usarlos en
+# update-crypto-policies --set. Sin este paso, la tarea de abajo falla con
+# "Unknown policy `NO-WEAKMAC`: file `NO-WEAKMAC.pmod` not found" (visto en
+# la prueba local del 2026-09-12 contra Rocky Linux 9 - mismo bug esperado
+# en el servidor real del banco, nunca se habia llegado hasta aqui porque
+# antes fallaba la conexion SSH/Kerberos). Contenido exacto tomado de la
+# guia oficial de remediacion CIS (ComplianceAsCode).
+- name: 1.6.4/1.6.5 - Crear los modulos personalizados de politica criptografica que CIS necesita (no vienen predefinidos)
+  ansible.builtin.copy:
+    dest: "/etc/crypto-policies/policies/modules/{{ item.name }}.pmod"
+    content: "{{ item.content }}\n"
+    mode: "0644"
+  loop:
+    - { name: "NO-WEAKMAC", content: "mac = -*-128*" }
+    - { name: "NO-SSHCBC", content: "cipher@SSH = -*-CBC" }
+  when:
+    - rhel9cis_rule_1_6_1 | bool
+    - rhel9cis_level >= 1
+  tags: ["1.6.1", "1.6.4", "1.6.5", "level1", "server"]
+
 - name: 1.6.1/1.6.3/1.6.4/1.6.5 - Aplicar politica criptografica de sistema con subpoliticas CIS
   ansible.builtin.command: >-
     update-crypto-policies --set {{ rhel9cis_crypto_policy_full }}
