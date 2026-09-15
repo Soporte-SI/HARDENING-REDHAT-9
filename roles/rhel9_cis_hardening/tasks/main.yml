@@ -17,6 +17,31 @@
          else (rhel9cis_uid_min_raw.stdout | default('1000') | trim) }}
   tags: always
 
+# AGREGADO 2026-09-13: PREFLIGHT - antes se usaba un texto generico inventado
+# para el banner legal cuando el banco no habia definido uno. Se quito ese
+# generico a proposito - este banner lo debe entregar y validar el banco
+# (nombre legal de la entidad, ley local aplicable, etc.). Si no esta
+# definido, se detiene aqui con un mensaje claro en vez de fallar mas
+# adelante con el error crudo de Jinja2 "'rhel9cis_warning_banner' is
+# undefined" (visto en la prueba local del 2026-09-13 contra Rocky Linux 9).
+- name: "PREFLIGHT - Validar que el banco haya definido el texto del banner legal (1.7.1/1.7.2/1.7.3)"
+  ansible.builtin.assert:
+    that:
+      - rhel9cis_warning_banner is defined
+      - rhel9cis_warning_banner | trim | length > 0
+    fail_msg: >-
+      Falta definir 'rhel9cis_warning_banner' en group_vars/all.yml (o cifrado
+      en vault.yml) con el texto legal de advertencia que el banco quiera
+      mostrar al conectarse a estos servidores (nombre de la entidad, ley
+      local aplicable, etc.) - no se debe inventar un texto generico. Definir
+      esa variable antes de continuar, o poner en false
+      rhel9cis_rule_1_7_1/1_7_2/1_7_3 en group_vars/all.yml si el banco decide
+      no aplicar este control por ahora.
+  when:
+    - (rhel9cis_rule_1_7_1 | bool) or (rhel9cis_rule_1_7_2 | bool) or (rhel9cis_rule_1_7_3 | bool)
+    - rhel9cis_level >= 1
+  tags: always
+
 # NOTA de mapeo de secciones: el CIS RHEL9 Benchmark v2.0.0 tiene 7 secciones de primer
 # nivel (1 Initial Setup, 2 Services, 3 Network, 4 Firewall Configuration, 5 Access/
 # Authentication/Authorization, 6 Logging and Auditing, 7 System Maintenance). Para respetar

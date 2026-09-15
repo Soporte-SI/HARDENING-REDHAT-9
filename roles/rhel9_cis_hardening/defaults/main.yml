@@ -103,6 +103,16 @@ rhel9cis_rule_1_6_2: true  # [1.6.2] (L1) Ensure system wide crypto policy is no
 rhel9cis_rule_1_6_3: true  # [1.6.3] (L1) Ensure system wide crypto policy disables sha1 hash and signature support
 rhel9cis_rule_1_6_4: true  # [1.6.4] (L1) Ensure system wide crypto policy disables macs less than 128 bits
 rhel9cis_rule_1_6_5: true  # [1.6.5] (L1) Ensure system wide crypto policy disables cbc for ssh
+# AGREGADO 2026-09-13: rhel9cis_warning_banner NO tiene valor por defecto a
+# proposito - el texto legal del banner de advertencia lo debe entregar y
+# validar el banco (nombre legal de la entidad, ley local aplicable, etc.),
+# no se debe inventar un texto generico. Definirlo en group_vars/all.yml
+# (o vault si prefieren no dejarlo en texto plano). Sin este dato, la tarea
+# 1.7.1/1.7.2/1.7.3 falla ahora con un mensaje claro (ver PREFLIGHT en
+# tasks/main.yml) en vez del error crudo "'rhel9cis_warning_banner' is
+# undefined" que salio en la prueba local del 2026-09-13.
+rhel9cis_warning_banner: ""
+
 rhel9cis_rule_1_7_1: true  # [1.7.1] (L1) Ensure message of the day is configured properly
 rhel9cis_rule_1_7_2: true  # [1.7.2] (L1) Ensure local login warning banner is configured properly
 rhel9cis_rule_1_7_3: true  # [1.7.3] (L1) Ensure remote login warning banner is configured properly
