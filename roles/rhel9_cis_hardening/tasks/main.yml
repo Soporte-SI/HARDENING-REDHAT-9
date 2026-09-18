@@ -20,11 +20,20 @@
 # AGREGADO 2026-09-13: PREFLIGHT - antes se usaba un texto generico inventado
 # para el banner legal cuando el banco no habia definido uno. Se quito ese
 # generico a proposito - este banner lo debe entregar y validar el banco
-# (nombre legal de la entidad, ley local aplicable, etc.). Si no esta
-# definido, se detiene aqui con un mensaje claro en vez de fallar mas
-# adelante con el error crudo de Jinja2 "'rhel9cis_warning_banner' is
-# undefined" (visto en la prueba local del 2026-09-13 contra Rocky Linux 9).
-- name: "PREFLIGHT - Validar que el banco haya definido el texto del banner legal (1.7.1/1.7.2/1.7.3)"
+# (nombre legal de la entidad, ley local aplicable, etc.).
+#
+# CORREGIDO 2026-09-17: antes este assert no tenia "ignore_errors", asi que
+# si el banco todavia no habia definido el banner, se detenia AQUI y ninguna
+# de las 7 secciones de abajo llegaba a correr (ni siquiera las que no tienen
+# nada que ver con el banner). Ahora, igual que las otras 11 verificaciones
+# de este playbook, solo se reporta (se sigue viendo el mensaje de abajo si
+# falta el banner) pero ya no detiene el resto de controles. La tarea que de
+# verdad aplica el banner (1.7.1/1.7.2/1.7.3, en section1_initial_setup.yml)
+# tiene su propio "when" que exige que el texto ya este definido, asi que no
+# se corre el riesgo de escribir un banner vacio si esta variable sigue sin
+# valor - simplemente ese control puntual se salta hasta que el banco lo
+# entregue, y todo lo demas continua.
+- name: "Validar que el banco haya definido el texto del banner legal (1.7.1/1.7.2/1.7.3)"
   ansible.builtin.assert:
     that:
       - rhel9cis_warning_banner is defined
@@ -33,10 +42,11 @@
       Falta definir 'rhel9cis_warning_banner' en group_vars/all.yml (o cifrado
       en vault.yml) con el texto legal de advertencia que el banco quiera
       mostrar al conectarse a estos servidores (nombre de la entidad, ley
-      local aplicable, etc.) - no se debe inventar un texto generico. Definir
-      esa variable antes de continuar, o poner en false
-      rhel9cis_rule_1_7_1/1_7_2/1_7_3 en group_vars/all.yml si el banco decide
-      no aplicar este control por ahora.
+      local aplicable, etc.) - no se debe inventar un texto generico. Mientras
+      no se defina, los controles 1.7.1/1.7.2/1.7.3 se van a saltar (no se
+      aplica ningun banner) pero el resto del playbook continua normalmente.
+    quiet: true
+  ignore_errors: true
   when:
     - (rhel9cis_rule_1_7_1 | bool) or (rhel9cis_rule_1_7_2 | bool) or (rhel9cis_rule_1_7_3 | bool)
     - rhel9cis_level >= 1

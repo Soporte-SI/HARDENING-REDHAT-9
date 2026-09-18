@@ -356,6 +356,14 @@
   tags: ["1.6.2", "level1", "server"]
 
 # --- 1.7 Command line warning banners ----------------------------------------------------
+# CORREGIDO 2026-09-17: se agrega la condicion de que rhel9cis_warning_banner
+# ya tenga texto real. Antes esto no se validaba aqui - dependia por completo
+# de que el assert de tasks/main.yml detuviera el playbook antes de llegar a
+# esta tarea. Ahora que ese assert ya no detiene nada (solo avisa), sin esta
+# condicion se hubiera escrito un banner vacio en /etc/motd, /etc/issue e
+# /etc/issue.net cuando el banco todavia no definio el texto - por eso se
+# agrega aqui mismo, para que este control puntual se salte (no runs) hasta
+# que el texto exista, sin afectar al resto del playbook.
 - name: 1.7.1/1.7.2/1.7.3 - Desplegar banner de advertencia legal en motd, issue e issue.net
   ansible.builtin.template:
     src: banner.j2
@@ -373,6 +381,7 @@
   when:
     - lookup('vars', 'rhel9cis_rule_' + item.id | replace('.', '_')) | bool
     - rhel9cis_level >= 1
+    - rhel9cis_warning_banner | default('') | trim | length > 0
   tags: ["1.7.1", "1.7.2", "1.7.3", "level1", "server"]
 
 - name: 1.7.4/1.7.5/1.7.6 - Fijar permisos de motd, issue e issue.net
