@@ -1,4 +1,4 @@
-# {{ ansible_managed }}
+# {{ ansible_managed | default('Ansible managed') }}
 # CIS RHEL9 - GDM/GNOME hardening: bloqueo de claves dconf para que el usuario no las sobrescriba
 {% if rhel9cis_rule_1_8_5 | default(false) | bool %}
 /org/gnome/desktop/session/idle-delay

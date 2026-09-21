@@ -1,4 +1,4 @@
-# {{ ansible_managed }}
+# {{ ansible_managed | default('Ansible managed') }}
 # CIS RHEL9 - GDM/GNOME hardening settings (Section 1.8)
 [org/gnome/login-screen]
 {% if rhel9cis_rule_1_8_2 | default(false) | bool %}

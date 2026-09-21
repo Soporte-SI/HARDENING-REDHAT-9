@@ -1,5 +1,5 @@
 #!/usr/sbin/nft -f
-# {{ ansible_managed }}
+# {{ ansible_managed | default('Ansible managed') }}
 # CIS RHEL9 4.3 - base chains, deny por defecto y trafico de loopback (rhel9_cis_hardening)
 
 flush ruleset

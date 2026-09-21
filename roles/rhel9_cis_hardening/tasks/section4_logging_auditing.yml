@@ -50,7 +50,7 @@
   ansible.builtin.copy:
     dest: /etc/cron.d/cis-aide-check
     content: |
-      # {{ ansible_managed }}
+      # {{ ansible_managed | default('Ansible managed') }}
       # CIS 6.1.2 - Verificacion diaria de integridad de archivos con AIDE
       05 05 * * * root /usr/sbin/aide --check
     owner: root
@@ -202,7 +202,7 @@
   ansible.builtin.copy:
     dest: /etc/rsyslog.d/60-cis-imjournal.conf
     content: |
-      # {{ ansible_managed }}
+      # {{ ansible_managed | default('Ansible managed') }}
       # CIS 6.2.3.3 - reenvio de journald a rsyslog
       module(load="imjournal" StateFile="imjournal.state")
     owner: root

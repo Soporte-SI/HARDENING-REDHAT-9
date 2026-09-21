@@ -750,7 +750,7 @@
   ansible.builtin.copy:
     dest: /etc/profile.d/60-cis-tmout.sh
     content: |
-      # {{ ansible_managed }}
+      # {{ ansible_managed | default('Ansible managed') }}
       # CIS 5.4.3.2 - Timeout de sesion de shell inactiva
       readonly TMOUT=900 ; export TMOUT
     owner: root
