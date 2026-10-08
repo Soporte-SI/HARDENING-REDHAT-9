@@ -183,3 +183,19 @@ Estado de implementacion en este rol (ver detalle completo por ID en
 Ningun control queda sin rastro: todo ID del benchmark aparece exactamente una vez en
 `docs/coverage_matrix.csv` con su estado (`implemented` o `manual`) y, cuando aplica, el
 tag/ID de la tarea Ansible que lo implementa.
+
+## Acta de Entrega-Recepción
+
+| Campo | Detalle |
+|---|---|
+| Proyecto | Desarrollo de 18 Playbooks de automatización con Ansible/AWX - Banco Solidario |
+| Playbook entregado | Playbook 1 de 18: Hardening CIS Red Hat Enterprise Linux 9 (Benchmark v2.0.0, Nivel 1 + 2, Server) |
+| Commit / etiqueta entregada | Código Completado |
+| Fecha de elaboración del documento | 8 de octubre de 2026 |
+
+| ENTREGA - GMS | RECIBE - BANCO SOLIDARIO |
+|---|---|
+| **Juan Pablo Castillo** | **Jeremy Moreno** |
+| Líder de Proyecto | Seguridad de la Información |
+| Fecha de elaboración del documento: 8 de octubre de 2026 | Fecha de elaboración del documento: 8 de octubre de 2026 |
+| Firma: ______________________ | Firma: ______________________ |
