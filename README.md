@@ -186,6 +186,8 @@ tag/ID de la tarea Ansible que lo implementa.
 
 ## Acta de Entrega-Recepción
 
+Documento completo (PDF): [docs/Acta_Entrega_Recepcion_Playbook01_Hardening_RHEL9.pdf](docs/Acta_Entrega_Recepcion_Playbook01_Hardening_RHEL9.pdf)
+
 | Campo | Detalle |
 |---|---|
 | Proyecto | Desarrollo de 18 Playbooks de automatización con Ansible/AWX - Banco Solidario |
